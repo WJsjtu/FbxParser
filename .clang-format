@@ -1,0 +1,27 @@
+BasedOnStyle: Google
+ColumnLimit: 300
+
+# Indent
+IndentWidth: 4
+CompactNamespaces: true
+NamespaceIndentation: None
+AccessModifierOffset: -4
+# IndentPPDirectives: BeforeHash
+
+# Short
+# AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+# AllowShortIfStatementsOnASingleLine: Always
+# AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+
+# Force pointers to the type for C++.
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+FixNamespaceComments: true
+
+# Only sort headers in each include block
+SortIncludes: false
+IncludeBlocks: Preserve

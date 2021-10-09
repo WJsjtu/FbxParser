@@ -1,0 +1,104 @@
+name: CMake
+
+on:
+  push:
+    tags:        
+      - '*'
+
+jobs:
+  build-macos-cocoa-clang:
+    name: Cocoa (macOS, Clang)
+    # The CMake configure and build commands are platform agnostic and should work equally
+    # well on Windows or Mac.  You can convert this to a matrix build if you need
+    # cross-platform coverage.
+    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    runs-on:  macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: 10.9
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Install
+        run: CI/GitHubInstall.ps1
+        shell: pwsh
+
+      - name: Read Install Path
+        id: get-fbx-path
+        run: echo "::set-output name=FBX_PATH::$(cat fbx.txt)"
+
+      - name: Configure CMake Debug
+        run: cmake -B ${{github.workspace}}/Build/Debug -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/Debug -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
+      - name: Build Debug
+        run: cmake --build ${{github.workspace}}/Build/Debug --config DEBUG --target install
+        
+      - name: Configure CMake MinSizeRel
+        run: cmake -B ${{github.workspace}}/Build/MinSizeRel -DCMAKE_BUILD_TYPE=MINSIZEREL -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/MinSizeRel  -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
+      - name: Build MinSizeRel
+        run: cmake --build ${{github.workspace}}/Build/MinSizeRel --config MINSIZEREL --target install
+
+      - uses: actions/upload-artifact@master
+        with:
+          name: darwin
+          path: |
+            ${{github.workspace}}/Install/Debug
+            ${{github.workspace}}/Install/MinSizeRel
+
+  build-windows-win32-vs2017:
+    name: Win32 (Windows, VS2017)
+    runs-on: windows-2016
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Install
+        run: CI/GitHubInstall.ps1
+        shell: pwsh
+
+      - name: Read Install Path
+        id: get-fbx-path
+        run: echo "::set-output name=FBX_PATH::$(cat fbx.txt)"
+
+      - name: Configure CMake Debug
+        run: cmake -B ${{github.workspace}}/Build/Debug -G "Visual Studio 15 2017" -A x64 -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/Debug -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
+      - name: Build Debug
+        run: cmake --build ${{github.workspace}}/Build/Debug --config DEBUG --target install
+      
+      - name: Configure CMake MinSizeRel
+        run: cmake -B ${{github.workspace}}/Build/MinSizeRel -G "Visual Studio 15 2017" -A x64 -DCMAKE_BUILD_TYPE=MINSIZEREL -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/MinSizeRel -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
+      - name: Build MinSizeRel
+        run: cmake --build ${{github.workspace}}/Build/MinSizeRel --config MINSIZEREL --target install
+
+      - uses: actions/upload-artifact@master
+        with:
+          name: win32
+          path: |
+            ${{github.workspace}}/Install/Debug
+            ${{github.workspace}}/Install/MinSizeRel
+
+  release:
+    name: Release
+    needs: [build-macos-cocoa-clang, build-windows-win32-vs2017]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+
+      - uses: actions/download-artifact@master
+        with:
+          name: darwin
+          path: ${{github.workspace}}/release/darwin
+
+      - uses: actions/download-artifact@master
+        with:
+          name: win32
+          path: ${{github.workspace}}/release/win32
+
+      - name: Zip
+        run: cd ${{github.workspace}}/release && zip -vr ${{github.workspace}}/release.zip ./ && cd ${{github.workspace}}
+      
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: false
+          name: ${{ steps.version.outputs.version }}
+          files: ${{github.workspace}}/release.zip
+      

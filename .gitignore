@@ -1,0 +1,7 @@
+.vs
+ThirdParty/glm
+ThirdParty/ext-mikktspace
+ThirdParty/filesystem
+ThirdParty/ImageDecoder
+ThirdParty/spdlog
+Build

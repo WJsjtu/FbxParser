@@ -1,0 +1,1 @@
+UpdateExternalLib("spdlog" https://github.com/gabime/spdlog.git "v1.9.2")
