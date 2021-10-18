@@ -70,7 +70,7 @@ bool UVsEqual(const glm::dvec2& v1, const glm::dvec2& v2, float epsilon);
 bool NormalsEqual(const glm::vec3& v1, const glm::vec3& v2);
 bool NormalsEqual(const glm::vec3& v1, const glm::vec3& v2);
 
-glm::vec3 GetSafeNormal(const glm::vec3& vec, const float tolerance = SMALL_NUMBER);
+glm::vec3 GetSafeNormal(const glm::vec3& vec, const float tolerance = Configuration::VectorComparsionThreshold);
 
 void CreateOrthonormalBasis(glm::vec3& xAxis, glm::vec3& yAxis, glm::vec3& zAxis);
 

@@ -7,7 +7,12 @@
 namespace Fbx {
 namespace Configuration {
 uint32_t MaxTexCoord = 4;
-}
+uint32_t MaxFrameRate = 120;
+uint32_t DefaultFrameRate = 60;
+float VectorComparsionThreshold = 1.e-12f;
+float PointComparsionThreshold = 1.e-18f;
+float UVComparsionThreshold = 0.000009765625f;
+}  // namespace Configuration
 
 AssertException::AssertException(const std::string& msg) : message(msg) {}
 
@@ -457,7 +462,7 @@ bool ExistPath(const std::string& path) {
     try {
         return std::filesystem::exists(path);
     } catch (std::filesystem::filesystem_error error) {
-        std::cerr << "[std::filesystem::filesystem_error]: " << error.what() << std::endl;
+        LOG_DEBUG(std::string("[std::filesystem::filesystem_error]: ") + error.what());
         return false;
     } catch (...) {
         return false;
@@ -472,7 +477,7 @@ bool EnsurePath(const std::string& path) {
         }
         return true;
     } catch (std::filesystem::filesystem_error error) {
-        std::cerr << "[std::filesystem::filesystem_error]: " << error.what() << std::endl;
+        LOG_DEBUG(std::string("[std::filesystem::filesystem_error]: ") + error.what());
         return false;
     } catch (...) {
         return false;

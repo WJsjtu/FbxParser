@@ -79,7 +79,7 @@ void SkinnedMesh::CalculateInvRefMatrices() {
             glm::vec3 XAxis, YAxis, ZAxis;
 
             Maths::GetMatrixScaledAxes(CachedComposedRefPoseMatrices[b], XAxis, YAxis, ZAxis);
-            if (Maths::IsNearlyZero(XAxis, SMALL_NUMBER) && Maths::IsNearlyZero(YAxis, SMALL_NUMBER) && Maths::IsNearlyZero(ZAxis, SMALL_NUMBER)) {
+            if (Maths::IsNearlyZero(XAxis, Configuration::VectorComparsionThreshold) && Maths::IsNearlyZero(YAxis, Configuration::VectorComparsionThreshold) && Maths::IsNearlyZero(ZAxis, Configuration::VectorComparsionThreshold)) {
                 // this is not allowed, warn them
                 LOG_WARN(fmt::format("Reference Pose for asset {} for joint {} includes NIL matrix. Zero scale isn't allowed on ref pose. ", name, skeleton.GetBoneInfo()[b].name));
             }
@@ -305,8 +305,9 @@ void PolygonShellsHelper::AddAdjacentFace(const std::vector<uint32_t>& indices, 
                     ASSERT(vertices.size() > vertexIndexAdj && vertexIndexAdj >= 0);
                     const SubMeshVertexWithWedgeIdx& softSkinVertAdj = vertices[vertexIndexAdj];
 
-                    if (PointsEqual(positionRef, softSkinVertAdj.position, SMALL_NUMBER) && PointsEqual(tangentXRef, softSkinVertAdj.tangentX, SMALL_NUMBER) && PointsEqual(tangentYRef, softSkinVertAdj.tangentY, SMALL_NUMBER) && PointsEqual(tangentZRef, softSkinVertAdj.tangentZ, SMALL_NUMBER) &&
-                        UVsEqual(UVRef, softSkinVertAdj.uvs[0], KINDA_SMALL_NUMBER) && colorRef == softSkinVertAdj.color) {
+                    if (PointsEqual(positionRef, softSkinVertAdj.position, Configuration::PointComparsionThreshold) && PointsEqual(tangentXRef, softSkinVertAdj.tangentX, Configuration::VectorComparsionThreshold) &&
+                        PointsEqual(tangentYRef, softSkinVertAdj.tangentY, Configuration::VectorComparsionThreshold) && PointsEqual(tangentZRef, softSkinVertAdj.tangentZ, Configuration::VectorComparsionThreshold) && UVsEqual(UVRef, softSkinVertAdj.uvs[0], Configuration::UVComparsionThreshold) &&
+                        colorRef == softSkinVertAdj.color) {
                         bRealConnection = true;
                         break;
                     }

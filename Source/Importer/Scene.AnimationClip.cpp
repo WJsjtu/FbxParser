@@ -104,13 +104,13 @@ int Scene::GetMaxSampleRate(std::vector<FbxNode*>& sortedLinks, FbxNode* rootNod
     maxStackResampleRate = curveAnimSampleRates.size() > 0 ? 1 : maxStackResampleRate;
     // Find the lowest sample rate that will pass by all the keys from all curves
     for (int curveSampleRate : curveAnimSampleRates) {
-        if (curveSampleRate >= MaxReferenceRate && maxStackResampleRate < curveSampleRate) {
+        if (curveSampleRate >= Configuration::MaxFrameRate && maxStackResampleRate < curveSampleRate) {
             maxStackResampleRate = curveSampleRate;
-        } else if (maxStackResampleRate < MaxReferenceRate) {
+        } else if (maxStackResampleRate < Configuration::MaxFrameRate) {
             int LeastCommonMultiplier = Maths::LeastCommonMultiplier(maxStackResampleRate, curveSampleRate);
-            maxStackResampleRate = LeastCommonMultiplier != 0 ? LeastCommonMultiplier : Maths::Max(DEFAULT_SAMPLERATE, Maths::Max(maxStackResampleRate, curveSampleRate));
-            if (maxStackResampleRate >= MaxReferenceRate) {
-                maxStackResampleRate = MaxReferenceRate;
+            maxStackResampleRate = LeastCommonMultiplier != 0 ? LeastCommonMultiplier : Maths::Max(static_cast<int>(Configuration::DefaultFrameRate), Maths::Max(maxStackResampleRate, curveSampleRate));
+            if (maxStackResampleRate >= Configuration::MaxFrameRate) {
+                maxStackResampleRate = Configuration::MaxFrameRate;
             }
         }
     }
@@ -124,7 +124,7 @@ int Scene::GetMaxSampleRate(std::vector<FbxNode*>& sortedLinks, FbxNode* rootNod
         return maxStackResampleRate;
     }
 
-    return DEFAULT_SAMPLERATE;
+    return Configuration::DefaultFrameRate;
 }
 
 bool Scene::ValidateAnimStack(std::vector<FbxNode*>& sortedLinks, FbxNode* rootNode, FbxAnimStack* curAnimStack, int resampleRate, bool bImportMorph, FbxTimeSpan& animTimeSpan) {
@@ -259,7 +259,7 @@ void Scene::ImportBoneTracks(Builder::SkinnedMeshSkeleton skeleton, std::shared_
     timeIncrement.SetSecondDouble(1.0 / ((double)(resampleRate)));
 
     // Add a threshold when we compare if we have reach the end of the animation
-    const FbxTime timeComparisonThreshold = (KINDA_SMALL_NUMBER * static_cast<float>(FBXSDK_TC_SECOND));
+    const FbxTime timeComparisonThreshold = (ANIMATION_SMALL_NUMBER * static_cast<float>(FBXSDK_TC_SECOND));
 
     const FbxTime timeDeltaForDerivative = (0.01 * static_cast<float>(FBXSDK_TC_MILLISECOND));
 
@@ -462,7 +462,7 @@ std::vector<std::shared_ptr<AnimationImportData>> Scene::ImportAnimations(FbxNod
         return result;
     }
     auto options = Importer::GetInstance()->options;
-    int resampleRate = DEFAULT_SAMPLERATE;
+    int resampleRate = Configuration::DefaultFrameRate;
     if (options->bResample) {
         if (options->resampleRate > 0) {
             resampleRate = options->resampleRate;
@@ -514,7 +514,7 @@ std::vector<std::shared_ptr<AnimationImportData>> Scene::ImportAnimations(FbxNod
             }
 
             auto animationImportData = std::make_shared<AnimationImportData>(skeleton, sortedLinks, ignoredSortedLinks, fbxRawBoneNames, fbxRawBonePaths, rootNode, animTimeSpan);
-            animationImportData->sequenceLength = Maths::Max(sequenceLength.GetSecondDouble(), 1.0 / DEFAULT_SAMPLERATE);
+            animationImportData->sequenceLength = Maths::Max(sequenceLength.GetSecondDouble(), 1.0 / Configuration::DefaultFrameRate);
             animationImportData->importFileFramerate = sceneInfo->originalFbxFramerate;
             animationImportData->importResampleFramerate = resampleRate;
             animationImportData->sequenceName = sequenceName;

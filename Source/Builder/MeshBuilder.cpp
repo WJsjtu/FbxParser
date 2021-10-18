@@ -194,14 +194,14 @@ bool PointsEqual(const glm::vec3& v1, const glm::vec3& v2, float comparisonThres
 }
 
 bool PointsEqual(const glm::vec3& v1, const glm::vec3& v2, bool bUseEpsilonCompare) {
-    const float epsilon = bUseEpsilonCompare ? THRESH_POINTS_ARE_SAME : 0.0f;
+    const float epsilon = bUseEpsilonCompare ? Configuration::PointComparsionThreshold : 0.0f;
     return Maths::Abs(v1.x - v2.x) <= epsilon && Maths::Abs(v1.y - v2.y) <= epsilon && Maths::Abs(v1.z - v2.z) <= epsilon;
 }
 
 bool UVsEqual(const glm::dvec2& v1, const glm::dvec2& v2, float epsilon = 1.0f / 1024.0f) { return Maths::Abs(v1.x - v2.x) <= epsilon && Maths::Abs(v1.y - v2.y) <= epsilon; }
 
 bool NormalsEqual(const glm::vec3& v1, const glm::vec3& v2) {
-    const float epsilon = THRESH_NORMALS_ARE_SAME;
+    const float epsilon = Configuration::VectorComparsionThreshold;
     return Maths::Abs(v1.x - v2.x) <= epsilon && Maths::Abs(v1.y - v2.y) <= epsilon && Maths::Abs(v1.z - v2.z) <= epsilon;
 }
 
@@ -274,7 +274,7 @@ float ComputeTriangleCornerAngle(const glm::vec3& pointA, const glm::vec3& point
     // [-1, 1]
     e1 = glm::normalize(e1);
     e2 = glm::normalize(e2);
-    if (!(glm::length2(e1) > SMALL_NUMBER) || !(glm::length2(e2) > SMALL_NUMBER)) {
+    if (!(glm::length2(e1) > Configuration::VectorComparsionThreshold) || !(glm::length2(e2) > Configuration::VectorComparsionThreshold)) {
         // Return a null ratio if the polygon is degenerate
         return 0.0f;
     }
@@ -554,7 +554,7 @@ bool IsTriangleMirror(IMeshBuildInputData& buildData, const std::vector<glm::vec
         }
     }
     // Check if the triangles normals are opposite and parallel. Dot product equal -1.0f
-    if (Maths::IsNearlyEqual(glm::dot(triangleTangentZ[faceIdxA], triangleTangentZ[faceIdxB]), -1.0f, KINDA_SMALL_NUMBER)) {
+    if (Maths::IsNearlyEqual(glm::dot(triangleTangentZ[faceIdxA], triangleTangentZ[faceIdxB]), -1.0f, Configuration::VectorComparsionThreshold)) {
         return true;
     }
     return false;
@@ -576,7 +576,7 @@ void ComputeTangents(const std::string& skinnedMeshName, IMeshBuildInputData& bu
     std::vector<glm::vec3> triangleTangentZ;
 
     // 先计算每个三角形的法线向量，并根据UV信息建立一个切线空间正交坐标系，其中TriangleTangentZ的坐标轴对应法线的反向。
-    ComputeTriangleTangents(triangleTangentX, triangleTangentY, triangleTangentZ, buildData, bIgnoreDegenerateTriangles ? SMALL_NUMBER : FLT_MIN);
+    ComputeTriangleTangents(triangleTangentX, triangleTangentY, triangleTangentZ, buildData, bIgnoreDegenerateTriangles ? Configuration::VectorComparsionThreshold : FLT_MIN);
 
     std::vector<int> faceIndexToPatchIndex;
     faceIndexToPatchIndex.resize(numFaces);
@@ -1245,7 +1245,7 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
 bool PrepareSourceMesh(const std::string& skinnedMeshName, IMeshBuildInputData& buildData, std::vector<std::shared_ptr<OverlappingCorners>>& overlappingCorners) {
     std::shared_ptr<OverlappingCorners> corners = std::make_shared<OverlappingCorners>();
     overlappingCorners.push_back(corners);
-    float comparisonThreshold = THRESH_POINTS_ARE_SAME;  // GetComparisonThreshold(LODBuildSettings[LODIndex]);
+    float comparisonThreshold = Configuration::PointComparsionThreshold;  // GetComparisonThreshold(LODBuildSettings[LODIndex]);
     int numWedges = buildData.GetNumWedges();
 
     // Find overlapping corners to accelerate adjacency.

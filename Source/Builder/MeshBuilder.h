@@ -26,16 +26,16 @@ struct MeshBuildSettings {
     bool bBuildAdjacencyBuffer = true;
 
     /** Threshold use to decide if two vertex position are equal. */
-    float thresholdPosition = 0.00002f;
+    float thresholdPosition = Configuration::PointComparsionThreshold;
 
     /** Threshold use to decide if two normal, tangents or bi-normals are equal. */
-    float thresholdTangentNormal = 0.00002f;
+    float thresholdTangentNormal = Configuration::VectorComparsionThreshold;
 
     /** Threshold use to decide if two UVs are equal. */
-    float thresholdUV = 0.0009765625f;
+    float thresholdUV = Configuration::UVComparsionThreshold;
 
     /** Threshold to compare vertex position equality when computing morph target deltas. */
-    float morphThresholdPosition = 0.015f;
+    float morphThresholdPosition = Configuration::PointComparsionThreshold;
 
     /** Equality operator. */
     bool operator==(const MeshBuildSettings& Other) const;

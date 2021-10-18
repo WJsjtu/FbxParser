@@ -1335,8 +1335,8 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     std::shared_ptr<Maths::BoxSphereBounds> boundingSphere = std::make_shared<Maths::BoxSphereBounds>(*boundingBox);
     const glm::vec3 boundingBoxSize = boundingBox->GetSize();
 
-    if (importData->points.size() > 2 && boundingBoxSize.x < THRESH_POINTS_ARE_SAME && boundingBoxSize.y < THRESH_POINTS_ARE_SAME && boundingBoxSize.z < THRESH_POINTS_ARE_SAME) {
-        LOG_ERROR(fmt::format("Bouding box with size smaller than {} will be discarded.", THRESH_POINTS_ARE_SAME));
+    if (importData->points.size() > 2 && boundingBoxSize.x < Configuration::PointComparsionThreshold && boundingBoxSize.y < Configuration::PointComparsionThreshold && boundingBoxSize.z < Configuration::PointComparsionThreshold) {
+        LOG_ERROR(fmt::format("Bouding box with size smaller than {} will be discarded.", Configuration::PointComparsionThreshold));
         return nullptr;
     }
 

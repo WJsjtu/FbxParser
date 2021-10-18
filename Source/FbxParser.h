@@ -18,9 +18,9 @@
 #endif
 #else
 #if __has_attribute(visibility)
-#    define FBX_PORT  __attribute__((visibility("default")))
+#define FBX_PORT __attribute__((visibility("default")))
 #else
-#    define FBX_PORT  
+#define FBX_PORT
 #endif
 #endif
 
@@ -28,7 +28,12 @@ namespace Fbx {
 
 namespace Configuration {
 FBX_PORT extern uint32_t MaxTexCoord;
-}
+FBX_PORT extern uint32_t MaxFrameRate;
+FBX_PORT extern uint32_t DefaultFrameRate;
+FBX_PORT extern float VectorComparsionThreshold;
+FBX_PORT extern float PointComparsionThreshold;
+FBX_PORT extern float UVComparsionThreshold;
+}  // namespace Configuration
 
 class FBX_PORT Options {
 public:
@@ -60,16 +65,16 @@ public:
     bool bPreserveSmoothingGroups = true;
 
     /** Threshold to compare vertex position equality. */
-    float thresholdPosition = 0.00002f;
+    float thresholdPosition = Configuration::PointComparsionThreshold;
 
     /** Threshold to compare normal, tangent or bi-normal equality. */
-    float thresholdTangentNormal = 0.00002f;
+    float thresholdTangentNormal = Configuration::VectorComparsionThreshold;
 
     /** Threshold to compare UV equality. */
-    float thresholdUV = 0.0009765625f;
+    float thresholdUV = Configuration::UVComparsionThreshold;
 
     /** Threshold to compare vertex position equality when computing morph target deltas. */
-    float morphThresholdPosition = 0.015f;
+    float morphThresholdPosition = Configuration::PointComparsionThreshold;
 
     uint32_t maxBones = 96;
 
@@ -79,7 +84,7 @@ public:
 
     EFBXAnimationLengthType animationLengthParseType = EFBXAnimationLengthType::FBXALIT_ExportedTime;
 
-    int resampleRate = 60;
+    int resampleRate = Configuration::DefaultFrameRate;
 
     bool bParseMorphTargets = true;
 

@@ -430,29 +430,7 @@ struct less<glm::vec3> {
 };
 }  // namespace std
 
-//
-// Magic numbers for numerical precision.
-//
-#define THRESH_POINT_ON_PLANE (0.10f)       /* Thickness of plane for front/back/inside test */
-#define THRESH_POINT_ON_SIDE (0.20f)        /* Thickness of polygon side's side-plane for point-inside/outside/on side test */
-#define THRESH_POINTS_ARE_SAME (0.00002f)   /* Two points are same if within this distance */
-#define THRESH_POINTS_ARE_NEAR (0.015f)     /* Two points are near if within this distance and can be combined if imprecise math is ok */
-#define THRESH_NORMALS_ARE_SAME (0.00002f)  /* Two normal points are same if within this distance */
-#define THRESH_UVS_ARE_SAME (0.0009765625f) /* Two UV are same if within this threshold (1.0f/1024f) */
-/* Making this too large results in incorrect CSG classification and disaster */
-#define THRESH_VECTORS_ARE_NEAR (0.0004f)         /* Two vectors are near if within this distance and can be combined if imprecise math is ok */
-                                                  /* Making this too large results in lighting problems due to inaccurate texture coordinates */
-#define THRESH_SPLIT_POLY_WITH_PLANE (0.25f)      /* A plane splits a polygon in half */
-#define THRESH_SPLIT_POLY_PRECISELY (0.01f)       /* A plane exactly splits a polygon */
-#define THRESH_ZERO_NORM_SQUARED (0.0001f)        /* Size of a unit normal that is considered "zero", squared */
-#define THRESH_NORMALS_ARE_PARALLEL (0.999845f)   /* Two unit vectors are parallel if abs(A dot B) is greater than or equal to this. This is roughly cosine(1.0 degrees). */
-#define THRESH_NORMALS_ARE_ORTHOGONAL (0.017455f) /* Two unit vectors are orthogonal (perpendicular) if abs(A dot B) is less than or equal this. This is roughly cosine(89.0 degrees). */
-
-#define THRESH_VECTOR_NORMALIZED (0.01f) /** Allowed error for a normalized vector (against squared magnitude) */
-#define THRESH_QUAT_NORMALIZED (0.01f)   /** Allowed error for a normalized quaternion (against squared magnitude) */
-
-#define SMALL_NUMBER (1.e-8f)
-#define KINDA_SMALL_NUMBER (1.e-4f)
+#define ANIMATION_SMALL_NUMBER (1.e-7f)
 
 /** These characters cannot be used in object names */
 #define INVALID_OBJECTNAME_CHARACTERS ("\"' ,/.:|&!~\n\r\t@#(){}[]=;^%$`")
@@ -461,13 +439,6 @@ struct less<glm::vec3> {
 #define INVALID_OBJECTPATH_CHARACTERS ("\"' ,|&!~\n\r\t@#(){}[]=;^%$`")
 
 #define INVALID_UNIQUE_ID 0xFFFFFFFFFFFFFFFF
-
-#define DEFAULT_SAMPLERATE 30
-
-// The max reference rate is use to cap the maximum rate we support.
-// It must be base on DEFAULT_SAMPLERATE*2ExpX where X is a integer with range [1 to 6] because we use
-// KINDA_SMALL_NUMBER(0.0001) we do not want to pass 1920Hz 1/1920 = 0.0005
-#define MaxReferenceRate 1920
 
 #define GeneratedLODNameSuffix "_GeneratedLOD_"
 

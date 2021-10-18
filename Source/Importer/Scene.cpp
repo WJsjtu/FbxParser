@@ -205,7 +205,7 @@ int ImporterHelper::GetAnimationCurveRate(FbxAnimCurve* currentCurve) {
             // all keys are time equidistant. But if we find a rate over DEFAULT_SAMPLERATE, we can estimate that
             // there is a constant frame rate between the key and simply return the rate.
             int sampleRate = Maths::RoundToInt((keyCount - 1) / keyAnimLength);
-            if (sampleRate >= DEFAULT_SAMPLERATE) {
+            if (sampleRate >= Configuration::DefaultFrameRate) {
                 // We import a curve with more then 30 keys per frame
                 return sampleRate;
             }
@@ -219,7 +219,7 @@ int ImporterHelper::GetAnimationCurveRate(FbxAnimCurve* currentCurve) {
             std::set<int> deltaComputed;
             // Reserve some space
             // DeltaComputed.Reserve(30);
-            const float keyMultiplier = (1.0f / KINDA_SMALL_NUMBER);
+            const float keyMultiplier = (1.0f / ANIMATION_SMALL_NUMBER);
             // Find also the smallest delta time between keys
             for (int keyIndex = 0; keyIndex < keyCount; keyIndex++) {
                 float keyTime = (float)(currentCurve->KeyGet(keyIndex).GetTime().GetSecondDouble());
@@ -228,12 +228,12 @@ int ImporterHelper::GetAnimationCurveRate(FbxAnimCurve* currentCurve) {
                 // use the fractional part of the delta to have the delta between 0.0f and 1.0f
                 delta = Maths::Fractional(delta);
                 int deltaKey = Maths::RoundToInt(delta * keyMultiplier);
-                if (!Maths::IsNearlyZero(delta, KINDA_SMALL_NUMBER) && (deltaComputed.find(deltaKey) == deltaComputed.end())) {
+                if (!Maths::IsNearlyZero(delta, ANIMATION_SMALL_NUMBER) && (deltaComputed.find(deltaKey) == deltaComputed.end())) {
                     int computeSampleRate = GetTimeSampleRate(delta);
                     deltaComputed.insert(deltaKey);
                     // Use the least common multiplier with the new delta entry
-                    int leastCommonMultiplier = Maths::Min(Maths::LeastCommonMultiplier(sampleRate, computeSampleRate), Maths::RoundToInt(MaxReferenceRate));
-                    sampleRate = leastCommonMultiplier != 0 ? leastCommonMultiplier : Maths::Max3(Maths::RoundToInt(DEFAULT_SAMPLERATE), sampleRate, computeSampleRate);
+                    int leastCommonMultiplier = Maths::Min(Maths::LeastCommonMultiplier(sampleRate, computeSampleRate), Maths::RoundToInt(Configuration::MaxFrameRate));
+                    sampleRate = leastCommonMultiplier != 0 ? leastCommonMultiplier : Maths::Max3(static_cast<int>(Configuration::DefaultFrameRate), sampleRate, computeSampleRate);
                 }
                 oldKeyTime = keyTime;
             }
@@ -251,18 +251,18 @@ int ImporterHelper::GetTimeSampleRate(const float deltaTime) {
     float sampleRateDivider = originalSampleRateDivider;
     float sampleRemainder = Maths::Fractional(sampleRateDivider);
     float multiplier = 2.0f;
-    float integerPrecision = Maths::Min(Maths::Max(KINDA_SMALL_NUMBER * sampleRateDivider, KINDA_SMALL_NUMBER),
+    float integerPrecision = Maths::Min(Maths::Max(ANIMATION_SMALL_NUMBER * sampleRateDivider, ANIMATION_SMALL_NUMBER),
                                         0.1f);  // The precision is limit between KINDA_SMALL_NUMBER and 0.1f
     while (!Maths::IsNearlyZero(sampleRemainder, integerPrecision) && !Maths::IsNearlyEqual(sampleRemainder, 1.0f, integerPrecision)) {
         sampleRateDivider = originalSampleRateDivider * multiplier;
         sampleRemainder = Maths::Fractional(sampleRateDivider);
-        if (sampleRateDivider > MaxReferenceRate) {
-            sampleRateDivider = DEFAULT_SAMPLERATE;
+        if (sampleRateDivider > Configuration::MaxFrameRate) {
+            sampleRateDivider = Configuration::DefaultFrameRate;
             break;
         }
         multiplier += 1.0f;
     }
-    return Maths::Min(Maths::RoundToInt(sampleRateDivider), Maths::RoundToInt(MaxReferenceRate));
+    return Maths::Min(Maths::RoundToInt(sampleRateDivider), Maths::RoundToInt(Configuration::MaxFrameRate));
 }
 
 bool ImporterHelper::IsOddNegativeScale(FbxAMatrix& matrix) {
@@ -909,7 +909,7 @@ std::shared_ptr<Scene> Importer::ConvertScene(std::shared_ptr<SceneInfo> sceneIn
     for (int animStackIndex = 0; animStackIndex < animStackCount; animStackIndex++) {
         FbxAnimStack* curAnimStack = sceneInfo->scene->GetSrcObject<FbxAnimStack>(animStackIndex);
         if (curAnimStack->GetMemberCount() > 1) {
-            int resampleRate = DEFAULT_SAMPLERATE;
+            int resampleRate = Configuration::DefaultFrameRate;
             {
                 if (options->bResample) {
                     std::vector<int> curveAnimSampleRates;
@@ -927,13 +927,13 @@ std::shared_ptr<Scene> Importer::ConvertScene(std::shared_ptr<SceneInfo> sceneIn
                     maxStackResampleRate = curveAnimSampleRates.size() > 0 ? 1 : maxStackResampleRate;
                     // Find the lowest sample rate that will pass by all the keys from all curves
                     for (int curveSampleRate : curveAnimSampleRates) {
-                        if (curveSampleRate >= MaxReferenceRate && maxStackResampleRate < curveSampleRate) {
+                        if (curveSampleRate >= Configuration::MaxFrameRate && maxStackResampleRate < curveSampleRate) {
                             maxStackResampleRate = curveSampleRate;
-                        } else if (maxStackResampleRate < MaxReferenceRate) {
+                        } else if (maxStackResampleRate < Configuration::MaxFrameRate) {
                             int leastCommonMultiplier = Maths::LeastCommonMultiplier(maxStackResampleRate, curveSampleRate);
-                            maxStackResampleRate = leastCommonMultiplier != 0 ? leastCommonMultiplier : Maths::Max3(Maths::RoundToInt(DEFAULT_SAMPLERATE), maxStackResampleRate, curveSampleRate);
-                            if (maxStackResampleRate >= MaxReferenceRate) {
-                                maxStackResampleRate = MaxReferenceRate;
+                            maxStackResampleRate = leastCommonMultiplier != 0 ? leastCommonMultiplier : Maths::Max3(static_cast<int>(Configuration::DefaultFrameRate), maxStackResampleRate, curveSampleRate);
+                            if (maxStackResampleRate >= Configuration::MaxFrameRate) {
+                                maxStackResampleRate = Configuration::MaxFrameRate;
                             }
                         }
                     }
