@@ -1,6 +1,5 @@
 ﻿#include "Scene.h"
-#define NOMINMAX
-#include "ghc/filesystem.hpp"
+#include <filesystem>
 #include <set>
 #include <numeric>
 
@@ -111,7 +110,7 @@ FbxNode* ImporterHelper::RecursiveGetFirstMeshNode(FbxNode* node, FbxNode* nodeT
         return nullptr;
     }
     if (node->GetMesh() != nullptr) return node;
-    for (int childIndex = 0; childIndex < node->GetChildCount(); ++childIndex) {
+    for (int childIndex = 0; childIndex < node->GetChildCount(); childIndex++) {
         FbxNode* meshNode = RecursiveGetFirstMeshNode(node->GetChild(childIndex), nodeToFind);
         if (nodeToFind == nullptr) {
             if (meshNode != nullptr) {
@@ -148,7 +147,7 @@ void ImporterHelper::GetNodeSampleRate(FbxNode* node, FbxAnimLayer* animLayer, s
         curves[7] = node->LclScaling.GetCurve(animLayer, FBXSDK_CURVENODE_COMPONENT_Y, false);
         curves[8] = node->LclScaling.GetCurve(animLayer, FBXSDK_CURVENODE_COMPONENT_Z, false);
 
-        for (int curveIndex = 0; curveIndex < maxElement; ++curveIndex) {
+        for (int curveIndex = 0; curveIndex < maxElement; curveIndex++) {
             FbxAnimCurve* currentCurve = curves[curveIndex];
             if (currentCurve) {
                 int curveAnimRate = GetAnimationCurveRate(currentCurve);
@@ -165,11 +164,11 @@ void ImporterHelper::GetNodeSampleRate(FbxNode* node, FbxAnimLayer* animLayer, s
         FbxGeometry* geometry = (FbxGeometry*)node->GetNodeAttribute();
         if (geometry) {
             int blendShapeDeformerCount = geometry->GetDeformerCount(FbxDeformer::eBlendShape);
-            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; ++blendShapeIndex) {
+            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; blendShapeIndex++) {
                 FbxBlendShape* blendShape = (FbxBlendShape*)geometry->GetDeformer(blendShapeIndex, FbxDeformer::eBlendShape);
 
                 int blendShapeChannelCount = blendShape->GetBlendShapeChannelCount();
-                for (int channelIndex = 0; channelIndex < blendShapeChannelCount; ++channelIndex) {
+                for (int channelIndex = 0; channelIndex < blendShapeChannelCount; channelIndex++) {
                     FbxBlendShapeChannel* Channel = blendShape->GetBlendShapeChannel(channelIndex);
 
                     if (Channel) {
@@ -222,7 +221,7 @@ int ImporterHelper::GetAnimationCurveRate(FbxAnimCurve* currentCurve) {
             // DeltaComputed.Reserve(30);
             const float keyMultiplier = (1.0f / KINDA_SMALL_NUMBER);
             // Find also the smallest delta time between keys
-            for (int keyIndex = 0; keyIndex < keyCount; ++keyIndex) {
+            for (int keyIndex = 0; keyIndex < keyCount; keyIndex++) {
                 float keyTime = (float)(currentCurve->KeyGet(keyIndex).GetTime().GetSecondDouble());
                 // Collect the smallest delta time, there is no delta in case the first animation key time is negative
                 float delta = (keyTime < 0 && keyIndex == 0) ? 0.0f : keyTime - oldKeyTime;
@@ -403,7 +402,8 @@ SceneInfo::~SceneInfo() {
     FbxTextureToUniqueNameMap.clear();
 }
 
-std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filename, std::shared_ptr<Options> options) {
+std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filePath, std::shared_ptr<Options> options) {
+    std::string filename = ImporterHelper::NativeToUTF8(filePath);
     int SDKMajor, SDKMinor, SDKRevision;
     std::shared_ptr<SceneInfo> result = std::make_shared<SceneInfo>();
     result->importer = FbxImporter::Create(sdkManager, "");
@@ -432,39 +432,29 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
     }
     if (!importSuccess)  // Problem with the file to be imported
     {
-        std::string errorMessage = "";
-        std::string detail = ImporterHelper::UTF8ToNative(result->importer->GetStatus().GetErrorString());
-        errorMessage += "FBX 文件打开错误：" + detail;
-        LOG_ERROR(errorMessage);
+        LOG_ERROR(fmt::format("Open FBX file error: {}", ImporterHelper::UTF8ToNative(result->importer->GetStatus().GetErrorString())));
         if (result->importer->GetStatus().GetCode() == FbxStatus::eInvalidFileVersion) {
-            LOG_ERROR("FBX文件版本过时，解析使用的FBX SDK版本为" + std::to_string(SDKMajor) + "." + std::to_string(SDKMinor) + "." + std::to_string(SDKRevision) + " 。");
+            LOG_ERROR(fmt::format("Outdated version for FBX file, the version of SDK for parsing FBX is {:d}.{:d}.{:d} .", SDKMajor, SDKMinor, SDKRevision));
         }
         return nullptr;
     }
 
     // Version out of date warning
-    int FileMajor = 0, FileMinor = 0, FileRevision = 0;
-    result->importer->GetFileVersion(FileMajor, FileMinor, FileRevision);
-    int FileVersion = (FileMajor << 16 | FileMinor << 8 | FileRevision);
+    int fileMajor = 0, fileMinor = 0, fileRevision = 0;
+    result->importer->GetFileVersion(fileMajor, fileMinor, fileRevision);
+    int FileVersion = (fileMajor << 16 | fileMinor << 8 | fileRevision);
     int SDKVersion = (SDKMajor << 16 | SDKMinor << 8 | SDKRevision);
     if (FileVersion != SDKVersion) {
-        // Appending the SDK version to the config key causes the warning to automatically reappear even if
-        // previously suppressed when the SDK version we use changes.
-
-        std::string fileVerStr = std::to_string(FileMajor) + "." + std::to_string(FileMinor) + "." + std::to_string(FileRevision);
-        std::string sdkVerStr = std::to_string(SDKMajor) + "." + std::to_string(SDKMinor) + "." + std::to_string(SDKRevision);
-
-        const std::string warningText = "检测到较为过时的FBX文件：导入的FBX文件版本为" + fileVerStr + "，解析使用的FBXSDK版本为" + sdkVerStr + "，解析过程有可能会出现一些非预期的结果。";
-        LOG_WARN(warningText);
+        LOG_WARN(fmt::format("Older version for FBX file detected: {:d}.{:d}.{:d}, the version of SDK for parsing FBX is {:d}.{:d}.{:d}, this may cause some unexpected result for parsing.", fileMajor, fileMinor, fileRevision, SDKMajor, SDKMinor, SDKRevision));
     }
 
     bool bStatus;
 
-    result->fileBasePath = ghc::filesystem::path(filename).parent_path().generic_string();
+    result->fileBasePath = std::filesystem::path(filePath).parent_path().generic_string();
 
     // Create the Scene
     result->scene = FbxScene::Create(sdkManager, "");
-    LOG_INFO("正在从FBX文件" + filename + "中加载场景……");
+    LOG_INFO(fmt::format("Loading scene from file {} ...", filePath));
 
     (*(result->importer->GetIOSettings())).SetBoolProp(IMP_FBX_MATERIAL, true);
     (*(result->importer->GetIOSettings())).SetBoolProp(IMP_FBX_TEXTURE, true);
@@ -481,13 +471,12 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
     bStatus = result->importer->Import(result->scene);
 
     if (!bStatus) {
-        std::string errorMessage = ImporterHelper::UTF8ToNative(result->importer->GetStatus().GetErrorString());
-        LOG_ERROR("FBX场景加载失败：" + errorMessage);
+        LOG_ERROR(fmt::format("Failed to load scene drome file {} .", ImporterHelper::UTF8ToNative(result->importer->GetStatus().GetErrorString())));
         return nullptr;
     }
 
     {
-        std::string baseFilename = (ghc::filesystem::path(filename).stem().generic_string());
+        std::string baseFilename = (std::filesystem::path(filePath).stem().generic_string());
 
         std::set<std::string> allNodeName;
         int currentNameIndex = 1;
@@ -500,7 +489,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                 } while (allNodeName.find(nodeName) != allNodeName.end());
 
                 node->SetName(ImporterHelper::NativeToUTF8(nodeName).c_str());
-                LOG_WARN("FBX文件中包含未命名的节点，自动分配节点名：" + nodeName + "。");
+                LOG_WARN(fmt::format("Set name \"{}\" for unnamed node.", nodeName));
             }
             // Do not allow node to be named same as filename as this creates problems later on (reimport)
             if (allNodeName.find(nodeName) != allNodeName.end() || Utils::InsensitiveCaseEquals(nodeName, baseFilename)) {
@@ -512,7 +501,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                 FbxString UniqueName(ImporterHelper::NativeToUTF8(uniqueNodeName).c_str());
                 result->nodeUniqueNameToOriginalNameMap[UniqueName] = node->GetName();
                 node->SetName(UniqueName);
-                LOG_WARN("FBX文件中包含命名相同的节点，自动重命名节点：" + nodeName + " -> " + uniqueNodeName + "。");
+                LOG_WARN(fmt::format("Auto rename duplicated node name: \"{}\" -> \"{}\" .", nodeName, uniqueNodeName));
             }
             allNodeName.insert(nodeName);
         }
@@ -525,7 +514,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
         std::set<std::string> allMaterialAndTextureNames;
         std::set<FbxFileTexture*> materialTextures;
 
-        auto FixNameIfNeeded = [this, &allMaterialAndTextureNames](const std::string& assetName, std::function<void(const std::string& /*UniqueName*/)> applyUniqueNameFunction, std::function<std::string(const std::string& /*UniqueName*/)> getErrorTextFunction) {
+        auto FixNameIfNeeded = [this, &allMaterialAndTextureNames](const std::string& assetName, std::function<void(const std::string&)> applyUniqueNameFunction, std::function<std::string(const std::string&)> getErrorTextFunction) {
             std::string uniqueName(assetName);
             if (allMaterialAndTextureNames.find(uniqueName) != allMaterialAndTextureNames.end()) {
                 // Use the fbx nameclash 1 convention: NAMECLASH1_KEY
@@ -555,7 +544,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                     // FbxLayeredTexture
                     auto AddSrcTextureToSet = [&textureSet](const auto& inObject) {
                         int NbTextures = inObject.template GetSrcObjectCount<FbxTexture>();
-                        for (int texIndex = 0; texIndex < NbTextures; ++texIndex) {
+                        for (int texIndex = 0; texIndex < NbTextures; texIndex++) {
                             FbxFileTexture* texture = inObject.template GetSrcObject<FbxFileTexture>(texIndex);
                             if (texture) {
                                 textureSet.insert(texture);
@@ -566,7 +555,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                     // Here we have to check if it's layered textures, or just textures:
                     const int layeredTextureCount = property.GetSrcObjectCount<FbxLayeredTexture>();
                     if (layeredTextureCount > 0) {
-                        for (int layerIndex = 0; layerIndex < layeredTextureCount; ++layerIndex) {
+                        for (int layerIndex = 0; layerIndex < layeredTextureCount; layerIndex++) {
                             if (const FbxLayeredTexture* lLayeredTexture = property.GetSrcObject<FbxLayeredTexture>(layerIndex)) {
                                 AddSrcTextureToSet(*lLayeredTexture);
                             }
@@ -582,7 +571,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
         };
 
         // First rename materials to unique names and gather their texture.
-        for (int materialIndex = 0; materialIndex < materialArray.Size(); ++materialIndex) {
+        for (int materialIndex = 0; materialIndex < materialArray.Size(); materialIndex++) {
             FbxSurfaceMaterial* material = materialArray[materialIndex];
             std::string materialName = ImporterHelper::MakeName(ImporterHelper::UTF8ToNative(material->GetName()));
             auto materialTextures = GetFbxMaterialTextures(*material);
@@ -590,13 +579,17 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
 
             material->SetName(ImporterHelper::NativeToUTF8(materialName).c_str());
 
-            FixNameIfNeeded(materialName, [&](const std::string& UniqueName) { material->SetName(ImporterHelper::NativeToUTF8(UniqueName).c_str()); }, [&](const std::string& UniqueName) { return "FBX文件中包含重名的材质，已重命名材质'" + materialName + "'-> '" + UniqueName + "'。"; });
+            FixNameIfNeeded(materialName, [&](const std::string& uniqueName) { material->SetName(ImporterHelper::NativeToUTF8(uniqueName).c_str()); },
+                            [&](const std::string& uniqueName) {
+                                std::string warnning = fmt::format("Auto rename duplicated material name: \"{}\" -> \"{}\" .", materialName, uniqueName);
+                                return warnning;
+                            });
         }
 
         // Then rename make sure the texture have unique names as well.
         for (FbxFileTexture* currentTexture : materialTextures) {
             std::string absoluteFilename = ImporterHelper::UTF8ToNative(currentTexture->GetFileName());
-            std::string textureName = ghc::filesystem::path(absoluteFilename).stem().generic_string();
+            std::string textureName = std::filesystem::path(absoluteFilename).stem().generic_string();
             auto SanitizeInvalidCharsInline = [](std::string& InText, const char* InvalidChars = INVALID_OBJECTNAME_CHARACTERS) {
                 const char* InvalidChar = InvalidChars ? InvalidChars : "";
                 while (*InvalidChar) {
@@ -611,19 +604,23 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
             };
             textureName = SanitizeInvalidCharsInline(textureName);
 
-            FixNameIfNeeded(textureName, [&](const std::string& UniqueName) { result->FbxTextureToUniqueNameMap.emplace(currentTexture, UniqueName); }, [&](const std::string& UniqueName) { return "FBX文件中包含重名的贴图，已重命名贴图'" + textureName + "'-> '" + UniqueName + "'。"; });
+            FixNameIfNeeded(textureName, [&](const std::string& uniqueName) { result->FbxTextureToUniqueNameMap.emplace(currentTexture, uniqueName); },
+                            [&](const std::string& UniqueName) {
+                                std::string warnning = fmt::format("Auto rename duplicated texture name: \"{}\" -> \"{}\" .", textureName, UniqueName);
+                                return warnning;
+                            });
         }
     }
 
     {
-        int FileMajor, FileMinor, FileRevision;
+        int fileMajor, fileMinor, fileRevision;
         // Get the version number of the FBX file format.
-        result->importer->GetFileVersion(FileMajor, FileMinor, FileRevision);
-        result->FbxFileVersion = std::to_string(FileMajor) + "." + std::to_string(FileMinor) + "." + std::to_string(FileRevision);
+        result->importer->GetFileVersion(fileMajor, fileMinor, fileRevision);
+        result->FbxFileVersion = fmt::format("{:d}.{:d}.{:d}", fileMajor, fileMinor, fileRevision);
 
         result->FbxFileCreator = result->importer->GetFileHeaderInfo()->mCreator.Buffer();
         // output result
-        LOG_INFO("FBX场景加载成功。");
+        LOG_INFO("Load scene from file successfully.");
 
         const FbxGlobalSettings& globalSettings = result->scene->GetGlobalSettings();
         FbxTime::EMode TimeMode = globalSettings.GetTimeMode();
@@ -659,7 +656,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                 //    if (parentNode != nullptr && parentNode->GetNodeAttribute() &&
                 //        parentNode->GetNodeAttribute()->GetAttributeType() == FbxNodeAttribute::eLODGroup) {
                 //        bool bIsLodRoot = false;
-                //        for (int childIndex = 0; childIndex < parentNode->GetChildCount(); ++childIndex) {
+                //        for (int childIndex = 0; childIndex < parentNode->GetChildCount(); childIndex++) {
                 //            FbxNode* MeshNode = ImporterHelper::FindLODGroupNode(parentNode, childIndex);
                 //            if (geoNode == MeshNode) {
                 //                bIsLodRoot = true;
@@ -711,7 +708,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                     FbxSkin* skin = (FbxSkin*)mesh->GetDeformer(0, FbxDeformer::eSkin);
                     int clusterCount = skin->GetClusterCount();
                     FbxNode* link = NULL;
-                    for (int clusterId = 0; clusterId < clusterCount; ++clusterId) {
+                    for (int clusterId = 0; clusterId < clusterCount; clusterId++) {
                         FbxCluster* cluster = skin->GetCluster(clusterId);
                         link = cluster->GetLink();
                         while (link && link->GetParent() && link->GetParent()->GetSkeleton()) {
@@ -764,7 +761,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
 
     {
         std::set<FbxUInt64> nodeGeometryIds;
-        for (int nodeIndex = 0; nodeIndex < result->scene->GetNodeCount(); ++nodeIndex) {
+        for (int nodeIndex = 0; nodeIndex < result->scene->GetNodeCount(); nodeIndex++) {
             FbxNode* sceneNode = result->scene->GetNode(nodeIndex);
             FbxGeometry* nodeGeometry = static_cast<FbxGeometry*>(sceneNode->GetMesh());
 
@@ -773,12 +770,12 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
             }
         }
 
-        for (int geoIndex = 0; geoIndex < result->scene->GetGeometryCount(); ++geoIndex) {
+        for (int geoIndex = 0; geoIndex < result->scene->GetGeometryCount(); geoIndex++) {
             FbxGeometry* geometry = result->scene->GetGeometry(geoIndex);
 
             if (nodeGeometryIds.find(geometry->GetUniqueID()) == nodeGeometryIds.end()) {
-                std::string geometryName = (geometry->GetName() && geometry->GetName()[0] != '\0') ? ImporterHelper::UTF8ToNative(geometry->GetName()) : "[未命名的几何体]";
-                LOG_WARN("FBX文件中网格 " + geometryName + "没有被场景的任何节点引用。");
+                std::string geometryName = (geometry->GetName() && geometry->GetName()[0] != '\0') ? ImporterHelper::UTF8ToNative(geometry->GetName()) : "[Unnamed geometry]";
+                LOG_WARN(fmt::format("Mesh \"{}\" is never used by any node in FBX.", geometryName));
             }
         }
     }
@@ -800,7 +797,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                     continue;
                 }
                 auto range = sceneNodeName.find(LodPrefix);
-                if (range != std::string::npos) {
+                if (range == std::string::npos) {
                     continue;
                 }
                 if (sceneNodeName.size() - range - 3 <= 0) {
@@ -828,7 +825,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
                     // Add LOD in the correct order
                     if (LodNumber >= LodSuffixNodeValues.size()) {
                         int addCount = LodNumber + 1 - LodSuffixNodeValues.size();
-                        for (int addIndex = 0; addIndex < addCount; ++addIndex) {
+                        for (int addIndex = 0; addIndex < addCount; addIndex++) {
                             LodSuffixNodeValues.push_back(std::numeric_limits<uint64_t>::max());
                         }
                     }
@@ -845,7 +842,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
             const std::vector<uint64_t>& LodGroupNodes = kvp.second;
             FbxNode* firstNode = nullptr;
             int validNodeCount = 0;
-            for (int currentLodIndex = 0; currentLodIndex < LodGroupNodes.size(); ++currentLodIndex) {
+            for (int currentLodIndex = 0; currentLodIndex < LodGroupNodes.size(); currentLodIndex++) {
                 if (LodGroupNodes[currentLodIndex] != std::numeric_limits<uint64_t>::max()) {
                     if (firstNode == nullptr) {
                         firstNode = nodeMap[LodGroupNodes[currentLodIndex]];
@@ -867,7 +864,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filenam
 
             for (int currentLodIndex = 0; currentLodIndex < LodGroupNodes.size(); currentLodIndex++) {
                 if (LodGroupNodes[currentLodIndex] == std::numeric_limits<uint64_t>::max()) {
-                    LOG_WARN("FBX文件中节点" + ImporterHelper::UTF8ToNative(parentNode->GetName()) + "下缺少LOD level为" + std::to_string(currentLodIndex) + "的网格信息。");
+                    fmt::format("Missing mesh info with lod level {:d} for node {}.", currentLodIndex, ImporterHelper::UTF8ToNative(parentNode->GetName()));
                     continue;
                 }
                 FbxNode* currentNode = nodeMap[LodGroupNodes[currentLodIndex]];
@@ -918,9 +915,9 @@ std::shared_ptr<Scene> Importer::ConvertScene(std::shared_ptr<SceneInfo> sceneIn
                     std::vector<int> curveAnimSampleRates;
                     int maxStackResampleRate = 0;
                     int animStackLayerCount = curAnimStack->GetMemberCount();
-                    for (int layerIndex = 0; layerIndex < animStackLayerCount; ++layerIndex) {
+                    for (int layerIndex = 0; layerIndex < animStackLayerCount; layerIndex++) {
                         FbxAnimLayer* animLayer = (FbxAnimLayer*)curAnimStack->GetMember(layerIndex);
-                        for (int nodeIndex = 0; nodeIndex < sceneInfo->scene->GetNodeCount(); ++nodeIndex) {
+                        for (int nodeIndex = 0; nodeIndex < sceneInfo->scene->GetNodeCount(); nodeIndex++) {
                             FbxNode* node = sceneInfo->scene->GetNode(nodeIndex);
                             // Get both the transform properties curve and the blend shape animation sample rate
                             ImporterHelper::GetNodeSampleRate(node, animLayer, curveAnimSampleRates, true, true);
@@ -1029,7 +1026,7 @@ std::shared_ptr<Scene> Importer::ConvertScene(std::shared_ptr<SceneInfo> sceneIn
     result->root = root;
     std::function<void(FbxNode*, std::shared_ptr<Objects::Entity>)> FillNode = [&](FbxNode* fbxNode, std::shared_ptr<Objects::Entity> node) {
         int nodeCount = fbxNode->GetChildCount();
-        for (int nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex) {
+        for (int nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++) {
             FbxNode* childFbxNode = fbxNode->GetChild(nodeIndex);
             std::shared_ptr<Objects::Entity> childNode = std::make_shared<Objects::Entity>();
             if (sceneInfo->scaleFactor != 1.0) {
@@ -1121,7 +1118,7 @@ glm::quat FbxDataConverter::ConvertRotToQuat(FbxQuaternion quaternion) {
 glm::mat4 FbxDataConverter::ConvertMatrix(const FbxAMatrix& matrix) {
     glm::mat4 out;
 
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < 4; i++) {
         const FbxVector4 Row = matrix.GetRow(i);
         out[i][0] = (float)(Row[0]);
         out[i][1] = (float)(Row[1]);

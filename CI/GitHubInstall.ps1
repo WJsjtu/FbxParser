@@ -26,7 +26,8 @@ function InstallFbxSdk {
         $FbxSdkWindowsInstaller = Join-Path "fbxsdk" "fbxsdk.exe"
         (New-Object System.Net.WebClient).DownloadFile($FBXSDK_2020_2_1_VS2017, $FbxSdkWindowsInstaller)
         $fbxSdkHome = [System.IO.Path]::Combine((Get-Location), "fbxsdk", "Home")
-        Start-Process -Wait -FilePath $FbxSdkWindowsInstaller -ArgumentList "/S","/D=$fbxSdkHome"
+        $fbxSdkInstallDir = [System.IO.Path]::Combine((Get-Location), "fbxsdk", "Home", "2020.2.1")
+        Start-Process -Wait -FilePath $FbxSdkWindowsInstaller -ArgumentList "/S","/D=$fbxSdkInstallDir"
     } elseif ($IsMacOS) {
         $FBXSDK_2020_2_1_CLANG = "https://www.autodesk.com/content/dam/autodesk/www/adn/fbx/2020-2-1/fbx202021_fbxsdk_clang_mac.pkg.tgz"
         $FBXSDK_2020_2_1_CLANG_VERSION = "2020.2.1"

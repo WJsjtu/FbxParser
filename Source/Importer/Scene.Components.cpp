@@ -57,7 +57,7 @@ void Scene::ProcessMesh() {
         Builder::SkinnedMeshHelper::ProcessImportMeshMaterials(meshAsset->materials, importData);
 
         Builder::MeshBuilder builder;
-        bool bBuildSuccess = builder.Build(meshAsset, importData, buildOptions);
+        bool bBuildSuccess = builder.Build(meshAsset, importData, sceneInfo, buildOptions);
         if (!bBuildSuccess) {
             continue;
         }
@@ -97,7 +97,7 @@ void Scene::ProcessSkinnedMesh() {
     int NbPoses = sdkManager->GetBindPoseCount(sceneInfo->scene);
 
     if (NbPoses != default_NbPoses) {
-        LOG_WARN("加载的场景中缺少蒙皮的绑定姿势信息（Bind Pose）。");
+        LOG_WARN("Missing bind pose for skinned mesh on scene.");
     }
 
     for (const auto& kvp : sceneInfo->meshInfo) {
@@ -160,7 +160,7 @@ void Scene::ProcessSkinnedMesh() {
         Builder::SkinnedMeshHelper::ProcessImportMeshInfluences(importData, skinnedMeshAsset->name);
 
         Builder::SkinnedMeshBuilder builder;
-        bool bBuildSuccess = builder.Build(skinnedMeshAsset, importData, buildOptions);
+        bool bBuildSuccess = builder.Build(skinnedMeshAsset, importData, sceneInfo, buildOptions);
         if (!bBuildSuccess) {
             continue;
         }
@@ -300,7 +300,7 @@ void Scene::ProcessAnimation() {
                     if (linkIndex != 0) {
                         const FbxNode* linkParent = link->GetParent();
                         // get the link parent index.
-                        for (int parentLinkIndex = 0; parentLinkIndex < linkIndex; ++parentLinkIndex)  // <LinkIndex because parent is guaranteed to be before child in
+                        for (int parentLinkIndex = 0; parentLinkIndex < linkIndex; parentLinkIndex++)  // <LinkIndex because parent is guaranteed to be before child in
                                                                                                        // sortedLink
                         {
                             FbxNode* Otherlink = sortedLinks[parentLinkIndex];
@@ -341,7 +341,7 @@ void Scene::ProcessAnimation() {
                     {
                         bool bFoundNan = false;
                         bool bFoundZeroScale = false;
-                        for (int i = 0; i < 4; ++i) {
+                        for (int i = 0; i < 4; i++) {
                             if (i < 3) {
                                 if (Maths::IsNaN(localLinkT[i]) || Maths::IsNaN(localLinkS[i])) {
                                     bFoundNan = true;
@@ -356,11 +356,11 @@ void Scene::ProcessAnimation() {
                         }
 
                         if (bFoundNan) {
-                            LOG_WARN("骨骼" + boneName + "的变换数据中含有NAN。");
+                            LOG_WARN(fmt::format("Transform data for bone \"{}\" contains NaN.", boneName));
                         }
 
                         if (bFoundZeroScale) {
-                            LOG_WARN("骨骼" + boneName + "的变换数据中含有0缩放的分量。");
+                            LOG_WARN(fmt::format("Transform data for bone \"{}\" contains dimension with zero scale.", boneName));
                         }
                     }
 

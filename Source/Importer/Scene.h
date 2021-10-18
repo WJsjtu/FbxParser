@@ -186,7 +186,7 @@ public:
     ~Importer();
     static std::shared_ptr<Importer> GetInstance();
 
-    std::shared_ptr<SceneInfo> GetFileSceneInfo(const std::string& filename, std::shared_ptr<Options> options);
+    std::shared_ptr<SceneInfo> GetFileSceneInfo(const std::string& filePath, std::shared_ptr<Options> options);
     std::shared_ptr<Scene> ImportScene(std::shared_ptr<SceneInfo> sceneInfo, std::shared_ptr<Options> options);
     std::shared_ptr<Options> options;
 

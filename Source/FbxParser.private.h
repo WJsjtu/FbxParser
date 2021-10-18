@@ -12,6 +12,9 @@
 #include <ostream>
 #include <sstream>
 #include "FbxParser.h"
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/stdout_sinks.h"
+#include "spdlog/sinks/rotating_file_sink.h"
 
 namespace Fbx {
 namespace Types {
@@ -356,11 +359,20 @@ public:
 
 }  // namespace Maths
 namespace Utils {
+class DefaultLogInstance {
+public:
+    DefaultLogInstance(const std::string& logFilePath);
+    void Log(ELogLevel level, std::string message);
+    std::shared_ptr<spdlog::logger> logger = nullptr;
+};
+
 bool IsNumeric(const std::string& str);
 
 void static SanitizeInvalidCharsInline(std::string& inText, const char* invalidChars);
 
 std::string static SanitizeInvalidChars(const std::string& inText, const char* invalidChars);
+
+bool ExistPath(const std::string& path);
 
 bool EnsurePath(const std::string& path);
 
@@ -395,7 +407,7 @@ std::string Join(Range const& elements, const char* const delimiter) {
 template <typename Input, typename Output, typename Value = typename Output::value_type>
 void Split(char delimiter, Output& output, Input const& input) {
     using namespace std;
-    for (auto cur = begin(input), beg = cur;; ++cur) {
+    for (auto cur = begin(input), beg = cur;; cur++) {
         if (cur == end(input) || *cur == delimiter || !*cur) {
             output.insert(output.end(), Value(beg, cur));
             if (cur == end(input) || !*cur)
@@ -421,26 +433,20 @@ struct less<glm::vec3> {
 //
 // Magic numbers for numerical precision.
 //
-#define THRESH_POINT_ON_PLANE (0.10f) /* Thickness of plane for front/back/inside test */
-#define THRESH_POINT_ON_SIDE                                                                                                                                                      \
-    (0.20f)                                 /* Thickness of polygon side's side-plane for point-inside/outside/on side test \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-                                             */
+#define THRESH_POINT_ON_PLANE (0.10f)       /* Thickness of plane for front/back/inside test */
+#define THRESH_POINT_ON_SIDE (0.20f)        /* Thickness of polygon side's side-plane for point-inside/outside/on side test */
 #define THRESH_POINTS_ARE_SAME (0.00002f)   /* Two points are same if within this distance */
 #define THRESH_POINTS_ARE_NEAR (0.015f)     /* Two points are near if within this distance and can be combined if imprecise math is ok */
 #define THRESH_NORMALS_ARE_SAME (0.00002f)  /* Two normal points are same if within this distance */
 #define THRESH_UVS_ARE_SAME (0.0009765625f) /* Two UV are same if within this threshold (1.0f/1024f) */
 /* Making this too large results in incorrect CSG classification and disaster */
-#define THRESH_VECTORS_ARE_NEAR (0.0004f)    /* Two vectors are near if within this distance and can be combined if imprecise math is ok */
-                                             /* Making this too large results in lighting problems due to inaccurate texture coordinates */
-#define THRESH_SPLIT_POLY_WITH_PLANE (0.25f) /* A plane splits a polygon in half */
-#define THRESH_SPLIT_POLY_PRECISELY (0.01f)  /* A plane exactly splits a polygon */
-#define THRESH_ZERO_NORM_SQUARED (0.0001f)   /* Size of a unit normal that is considered "zero", squared */
-#define THRESH_NORMALS_ARE_PARALLEL                                                                                                                                      \
-    (0.999845f) /* Two unit vectors are parallel if abs(A dot B) is greater than or equal to this. This is roughly \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-                   cosine(1.0 degrees). */
-#define THRESH_NORMALS_ARE_ORTHOGONAL                                                                                                                                        \
-    (0.017455f) /* Two unit vectors are orthogonal (perpendicular) if abs(A dot B) is less than or equal this. This is \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \
-                   roughly cosine(89.0 degrees). */
+#define THRESH_VECTORS_ARE_NEAR (0.0004f)         /* Two vectors are near if within this distance and can be combined if imprecise math is ok */
+                                                  /* Making this too large results in lighting problems due to inaccurate texture coordinates */
+#define THRESH_SPLIT_POLY_WITH_PLANE (0.25f)      /* A plane splits a polygon in half */
+#define THRESH_SPLIT_POLY_PRECISELY (0.01f)       /* A plane exactly splits a polygon */
+#define THRESH_ZERO_NORM_SQUARED (0.0001f)        /* Size of a unit normal that is considered "zero", squared */
+#define THRESH_NORMALS_ARE_PARALLEL (0.999845f)   /* Two unit vectors are parallel if abs(A dot B) is greater than or equal to this. This is roughly cosine(1.0 degrees). */
+#define THRESH_NORMALS_ARE_ORTHOGONAL (0.017455f) /* Two unit vectors are orthogonal (perpendicular) if abs(A dot B) is less than or equal this. This is roughly cosine(89.0 degrees). */
 
 #define THRESH_VECTOR_NORMALIZED (0.01f) /** Allowed error for a normalized vector (against squared magnitude) */
 #define THRESH_QUAT_NORMALIZED (0.01f)   /** Allowed error for a normalized quaternion (against squared magnitude) */
@@ -465,75 +471,31 @@ struct less<glm::vec3> {
 
 #define GeneratedLODNameSuffix "_GeneratedLOD_"
 
-#define MAX_TEXCOORDS 4
-#define MAX_STATIC_TEXCOORDS 8
-
-/** Max number of bone influences that a single skinned vert can have. */
-#define MAX_TOTAL_INFLUENCES 12
-
-/** Number of bone influences when using extra bone influences. */
-#define EXTRA_BONE_INFLUENCES 4
-
-/** max number of clothing vertices for uniform buffer which is up to 64kb */
-#define MAX_APEXCLOTH_VERTICES_FOR_UB 2048
-/** but maximum number will be 65536 when using vertex buffer */
-#define MAX_APEXCLOTH_VERTICES_FOR_VB 65536
-
 #define ASSERT(expr)                                                                                                                                           \
     if (!(expr)) {                                                                                                                                             \
         throw Fbx::AssertException("Assert failed, file: " + std::string(__FILE__) + ", line: " + std::to_string(__LINE__) + ", expr: " + std::string(#expr)); \
     }
 
 #ifdef _MSC_VER
-#define LOG_DEBUG(str)                                                                                                                           \
-    {                                                                                                                                            \
-        auto msg = Fbx::Utils::ANSItoUTF8(std::string(str));                                                                                     \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Debug, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_WARN(str)                                                                                                                           \
-    {                                                                                                                                           \
-        auto msg = Fbx::Utils::ANSItoUTF8(std::string(str));                                                                                    \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Warn, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_INFO(str)                                                                                                                           \
-    {                                                                                                                                           \
-        auto msg = Fbx::Utils::ANSItoUTF8(std::string(str));                                                                                    \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Info, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_ERROR(str)                                                                                                                           \
-    {                                                                                                                                            \
-        auto msg = Fbx::Utils::ANSItoUTF8(std::string(str));                                                                                     \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Error, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_CRITICAL(str)                                                                                                                           \
-    {                                                                                                                                               \
-        auto msg = Fbx::Utils::ANSItoUTF8(std::string(str));                                                                                        \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Critical, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
+#define LOG_DEBUG(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Debug, Fbx::Utils::ANSItoUTF8(std::string(str))); }
+#define LOG_WARN(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Warn, Fbx::Utils::ANSItoUTF8(std::string(str))); }
+#define LOG_INFO(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Info, Fbx::Utils::ANSItoUTF8(std::string(str))); }
+#define LOG_ERROR(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Error, Fbx::Utils::ANSItoUTF8(std::string(str))); }
+#define LOG_CRITICAL(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Critical, Fbx::Utils::ANSItoUTF8(std::string(str))); }
 #else
-#define LOG_DEBUG(str)                                                                                                                           \
-    {                                                                                                                                            \
-        auto msg = str;                                                                                                                          \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Debug, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_WARN(str)                                                                                                                           \
-    {                                                                                                                                           \
-        auto msg = str;                                                                                                                         \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Warn, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_INFO(str)                                                                                                                           \
-    {                                                                                                                                           \
-        auto msg = str;                                                                                                                         \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Info, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_ERROR(str)                                                                                                                           \
-    {                                                                                                                                            \
-        auto msg = str;                                                                                                                          \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Error, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
-#define LOG_CRITICAL(str)                                                                                                                           \
-    {                                                                                                                                               \
-        auto msg = str;                                                                                                                             \
-        Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Critical, "[" + std::string(__FILE__) + "][" + std::to_string(__LINE__) + "]:" + msg); \
-    }
+#define LOG_DEBUG(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Debug, std::string(str)); }
+#define LOG_WARN(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Warn, std::string(str)); }
+#define LOG_INFO(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Info, std::string(str)); }
+#define LOG_ERROR(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Error, std::string(str)); }
+#define LOG_CRITICAL(str) \
+    { Fbx::Utils::GetGlobalLogger()(Fbx::Utils::ELogLevel::Critical, std::string(str)); }
 #endif

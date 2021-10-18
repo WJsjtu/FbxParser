@@ -170,7 +170,7 @@ void BuildMeshChunks(const std::vector<Importer::MeshImportData::MeshFace>& face
 
         // Find a chunk which matches this triangle.
         std::shared_ptr<T> chunk = nullptr;
-        for (int i = 0; i < outChunks.size(); ++i) {
+        for (int i = 0; i < outChunks.size(); i++) {
             if (outChunks[i]->materialIndex == Face.meshMaterialIndex) {
                 chunk = outChunks[i];
                 break;
@@ -185,17 +185,17 @@ void BuildMeshChunks(const std::vector<Importer::MeshImportData::MeshFace>& face
 
         std::map<int, int>& finalVerts = chunkToFinalVerts[chunk];
 
-        for (int vertexIndex = 0; vertexIndex < 3; ++vertexIndex) {
+        for (int vertexIndex = 0; vertexIndex < 3; vertexIndex++) {
             int wedgeIndex = faceIndex * 3 + vertexIndex;
             const SubMeshVertexWithWedgeIdx& vertex = rawVertices[wedgeIndex];
 
             int finalVertIndex = -1;
             dupVerts.clear();
             {
-                auto Range = rawVerts2Dupes.equal_range(wedgeIndex);
-                if (Range.first != rawVerts2Dupes.end()) {
-                    for (auto Iter = Range.first; Iter != Range.second; ++Iter) {
-                        dupVerts.push_back(Iter->second);
+                auto range = rawVerts2Dupes.equal_range(wedgeIndex);
+                if (range.first != rawVerts2Dupes.end()) {
+                    for (auto iter = range.first; iter != range.second; iter++) {
+                        dupVerts.push_back(iter->second);
                     }
                 }
             }

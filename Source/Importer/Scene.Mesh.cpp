@@ -1,8 +1,10 @@
-﻿#define NOMINMAX
-#include <ghc/filesystem.hpp>
+﻿#include <filesystem>
 #include "Scene.h"
 
 namespace Fbx { namespace Importer {
+MeshImportData::MeshWedge::MeshWedge(uint32_t maxTexCoord) { uvs.resize(maxTexCoord); }
+
+MeshImportData::Vertex::Vertex(uint32_t maxTexCoord) { uvs.resize(maxTexCoord); }
 
 FbxNode* Scene::GetRootSkeleton(FbxNode* link) {
     FbxNode* rootBone = link;
@@ -63,7 +65,7 @@ FbxPose* Scene::RetrievePoseFromBindPose(FbxNode* node) {
             NodeList pMissingAncestors, pMissingDeformers, pMissingDeformersAncestors, pWrongMatrices;
 
             if (currentPose->IsValidBindPoseVerbose(node, pMissingAncestors, pMissingDeformers, pMissingDeformersAncestors, pWrongMatrices, 0.0001, &status)) {
-                LOG_INFO(ImporterHelper::UTF8ToNative(node->GetName()) + "找到绑定姿势" + poseName + "。");
+                LOG_INFO(fmt::format("Bind pose {} found for {}.", poseName, ImporterHelper::UTF8ToNative(node->GetName())));
                 return currentPose;
             } else {
                 // first try to fix up
@@ -80,7 +82,7 @@ FbxPose* Scene::RetrievePoseFromBindPose(FbxNode* node) {
 
                 // check it again
                 if (currentPose->IsValidBindPose(node)) {
-                    LOG_INFO(ImporterHelper::UTF8ToNative(node->GetName()) + "找到绑定姿势" + poseName + "。");
+                    LOG_INFO(fmt::format("Bind pose {} found for {}.", poseName, ImporterHelper::UTF8ToNative(node->GetName())));
                     return currentPose;
                 } else {
                     // first try to find parent who is null group and see if you can try test it
@@ -98,11 +100,10 @@ FbxPose* Scene::RetrievePoseFromBindPose(FbxNode* node) {
                     }
 
                     if (parentNode && currentPose->IsValidBindPose(parentNode)) {
-                        LOG_INFO(ImporterHelper::UTF8ToNative(node->GetName()) + "找到绑定姿势" + poseName + "。");
+                        LOG_INFO(fmt::format("Bind pose {} found for {}.", poseName, ImporterHelper::UTF8ToNative(node->GetName())));
                         return currentPose;
                     } else {
-                        std::string errorString = status.GetErrorString();
-                        LOG_INFO(ImporterHelper::UTF8ToNative(node->GetName()) + "获取绑定姿势" + poseName + "失败：" + errorString + "。");
+                        LOG_INFO(fmt::format("Failed to find bind pose {} found for {}: {}.", poseName, ImporterHelper::UTF8ToNative(node->GetName()), status.GetErrorString()));
                     }
                 }
             }
@@ -116,7 +117,7 @@ FbxPose* Scene::CreateOrRetrievePoseFromBindPose(FbxNode* node) {
     FbxPose* bindPose = RetrievePoseFromBindPose(node);
     // get bind pose
     if (bindPose == nullptr) {
-        LOG_WARN("蒙皮未找到绑定姿势，尝试创建一个新的。");
+        LOG_WARN("No bind pose was found for skin, trying to create one.");
         // if failed, delete bind pose, and retry.
         const int poseCount = sceneInfo->scene->GetPoseCount();
         for (int poseIndex = poseCount - 1; poseIndex >= 0; --poseIndex) {
@@ -130,9 +131,9 @@ FbxPose* Scene::CreateOrRetrievePoseFromBindPose(FbxNode* node) {
         Importer::GetInstance()->sdkManager->CreateMissingBindPoses(sceneInfo->scene);
         bindPose = RetrievePoseFromBindPose(node);
         if (bindPose == nullptr) {
-            LOG_ERROR("尝试创建新的蒙皮绑定姿势失败。");
+            LOG_ERROR("Failed to create a new bind pose.");
         } else {
-            LOG_INFO("尝试创建新的蒙皮绑定姿势成功。");
+            LOG_INFO("Create a new bind pose successfully.");
         }
     }
     return bindPose;
@@ -201,7 +202,7 @@ bool Scene::BuildSkeletonBones(const std::vector<FbxNode*>& sortedLinks, const s
         } else {
             const FbxNode* linkParent = link->GetParent();
             // get the link parent index.
-            for (int parentLinkIndex = 0; parentLinkIndex < linkIndex; ++parentLinkIndex)  // <LinkIndex because parent is guaranteed to be before child in
+            for (int parentLinkIndex = 0; parentLinkIndex < linkIndex; parentLinkIndex++)  // <LinkIndex because parent is guaranteed to be before child in
                                                                                            // sortedLink
             {
                 FbxNode* otherlink = sortedLinks[parentLinkIndex];
@@ -213,7 +214,7 @@ bool Scene::BuildSkeletonBones(const std::vector<FbxNode*>& sortedLinks, const s
 
             if (parentIndex == -1)  // We found another root inside the hierarchy, this is not supported
             {
-                LOG_ERROR("蒙皮寻找到的骨骼包含1个以上的根节点。");
+                LOG_ERROR("Multi root found for skeleton, this is not supported.");
                 return false;
             }
         }
@@ -241,7 +242,7 @@ bool Scene::BuildSkeletonBones(const std::vector<FbxNode*>& sortedLinks, const s
 
             bAnyLinksNotInBindPose = true;
             linksWithoutBindPoses += ImporterHelper::UTF8ToNative(link->GetName());
-            linksWithoutBindPoses += "  \n";
+            linksWithoutBindPoses += ",";
 
             for (int clusterIndex = 0; clusterIndex < clusters.size(); clusterIndex++) {
                 FbxCluster* cluster = clusters[clusterIndex];
@@ -296,7 +297,7 @@ bool Scene::BuildSkeletonBones(const std::vector<FbxNode*>& sortedLinks, const s
         {
             bool bFoundNan = false;
             bool bFoundZeroScale = false;
-            for (int i = 0; i < 4; ++i) {
+            for (int i = 0; i < 4; i++) {
                 if (i < 3) {
                     if (Maths::IsNaN(localLinkT[i]) || Maths::IsNaN(localLinkS[i])) {
                         bFoundNan = true;
@@ -311,11 +312,11 @@ bool Scene::BuildSkeletonBones(const std::vector<FbxNode*>& sortedLinks, const s
             }
 
             if (bFoundNan) {
-                LOG_WARN("骨骼" + boneName + "的变换数据中含有NAN。");
+                LOG_WARN(fmt::format("Transform data for bone {} contains NaN.", boneName));
             }
 
             if (bFoundZeroScale) {
-                LOG_WARN("骨骼" + boneName + "的变换数据中含有0缩放的分量。");
+                LOG_WARN(fmt::format("Transform data for bone \"{}\" contains dimension with zero scale.", boneName));
             }
         }
 
@@ -359,7 +360,7 @@ bool Scene::BuildSkeletonBones(const std::vector<FbxNode*>& sortedLinks, const s
     }
 
     if (bAnyLinksNotInBindPose) {
-        LOG_WARN("绑定姿势中缺少下列骨骼的信息:\n" + linksWithoutBindPoses + "\n这种情况出现的原因可能是骨骼的没有顶点权重。");
+        LOG_WARN(fmt::format("Info for bones {} is missing in bind pose.", linksWithoutBindPoses));
     }
 
     return true;
@@ -381,7 +382,7 @@ bool Scene::ImportBones(std::vector<FbxNode*>& sortedLinks, FbxNode* node, FbxMe
     }
 
     if (clusterArray.size() == 0) {
-        LOG_WARN("蒙皮未找到骨骼（No associated clusters）。");
+        LOG_WARN(fmt::format("No associated clusters found for {}.", ImporterHelper::UTF8ToNative(node->GetName())));
         return false;
     }
 
@@ -393,20 +394,19 @@ bool Scene::ImportBones(std::vector<FbxNode*>& sortedLinks, FbxNode* node, FbxMe
     // error check
     // if no bond is found
     if (sortedLinks.size() == 0) {
-        LOG_ERROR(ImporterHelper::UTF8ToNative(node->GetName()) + "没有找到任何骨骼。");
+        LOG_ERROR(fmt::format("No skeleton info found for {}.", ImporterHelper::UTF8ToNative(node->GetName())));
         return false;
     }
 
     int linkIndex;
 
     // Check for duplicate bone names and issue a warning if found
-    for (linkIndex = 0; linkIndex < sortedLinks.size(); ++linkIndex) {
+    for (linkIndex = 0; linkIndex < sortedLinks.size(); linkIndex++) {
         link = sortedLinks[linkIndex];
-        for (int altLinkIndex = linkIndex + 1; altLinkIndex < sortedLinks.size(); ++altLinkIndex) {
+        for (int altLinkIndex = linkIndex + 1; altLinkIndex < sortedLinks.size(); altLinkIndex++) {
             FbxNode* altLink = sortedLinks[altLinkIndex];
             if (strcmp(link->GetName(), altLink->GetName()) == 0) {
-                std::string rawBoneName = ImporterHelper::UTF8ToNative(link->GetName());
-                LOG_ERROR("导入骨骼失败，发现重名的骨骼" + rawBoneName + "。");
+                LOG_ERROR(fmt::format("Failed to import bones {}.", ImporterHelper::UTF8ToNative(link->GetName())));
                 return false;
             }
         }
@@ -418,7 +418,7 @@ bool Scene::ImportBones(std::vector<FbxNode*>& sortedLinks, FbxNode* node, FbxMe
     }
 
     // UE4 中会把骨骼根节点的坐标映射成相对于mesh的位置，这是不符合引擎的设计的。
-    //// In case we do a scene import we need a relative to skinned mesh transform instead of a global
+    // In case we do a scene import we need a relative to skinned mesh transform instead of a global
     // FbxAMatrix GlobalSkeletalNodeFbx = sceneInfo->scene->GetAnimationEvaluator()->GetNodeGlobalTransform(node, 0);
     // FTransform GlobalSkeletalNode;
     // GlobalSkeletalNode.SetFromMatrix(FbxDataConverter::ConvertMatrix(GlobalSkeletalNodeFbx.Inverse()));
@@ -705,7 +705,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
         // Do some checks before proceeding, check to make sure the number of bones does not exceed the maximum
         // supported
         if (sortedLinks.size() > 65536) {
-            LOG_ERROR("网格" + fbxMeshName + "中包含" + std::to_string(sortedLinks.size()) + "根骨骼，超过了所支持的上限。");
+            LOG_ERROR(fmt::format("Mesh {} contains {:d} bones, exceeding limit 65536.", fbxMeshName, sortedLinks.size()));
             return nullptr;
         }
     }
@@ -714,7 +714,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     // so that we know about all possible materials before assigning material indices to each triangle
     std::vector<FbxSurfaceMaterial*> fbxMaterials;
 
-    for (int materialIndex = 0; materialIndex < fbxNode->GetMaterialCount(); ++materialIndex) {
+    for (int materialIndex = 0; materialIndex < fbxNode->GetMaterialCount(); materialIndex++) {
         FbxSurfaceMaterial* fbxMaterial = fbxNode->GetMaterial(materialIndex);
         if (std::find(fbxMaterials.begin(), fbxMaterials.end(), fbxMaterial) == fbxMaterials.end()) {
             fbxMaterials.push_back(fbxMaterial);
@@ -732,7 +732,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     // Get the base layer of the mesh
     FbxLayer* baseLayer = fbxMesh->GetLayer(0);
     if (baseLayer == NULL) {
-        LOG_ERROR("网格" + fbxMeshName + "中没有任何几何体信息。");
+        LOG_ERROR(fmt::format("No geometry info found for mesh {}.", fbxMeshName));
         return nullptr;
     }
 
@@ -775,7 +775,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     std::vector<int> materialMapping;
     const int materialCount = fbxNode->GetMaterialCount();
     materialMapping.resize(materialCount);
-    for (int materialIndex = 0; materialIndex < materialCount; ++materialIndex) {
+    for (int materialIndex = 0; materialIndex < materialCount; materialIndex++) {
         FbxSurfaceMaterial* fbxMaterial = fbxNode->GetMaterial(materialIndex);
 
         int existingMatIndex = -1;
@@ -802,7 +802,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
             if (smoothingLayer) {
                 bool bValidSmoothingData = false;
                 FbxLayerElementArrayTemplate<int>& directArray = smoothingLayer->GetDirectArray();
-                for (int smoothingIndex = 0; smoothingIndex < directArray.GetCount(); ++smoothingIndex) {
+                for (int smoothingIndex = 0; smoothingIndex < directArray.GetCount(); smoothingIndex++) {
                     if (directArray[smoothingIndex] != 0) {
                         bValidSmoothingData = true;
                         break;
@@ -825,13 +825,13 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     }
 
     if (!fbxMesh->IsTriangleMesh()) {
-        LOG_INFO("正在三角化网格" + ImporterHelper::UTF8ToNative(fbxNode->GetName()) + "。");
+        LOG_INFO(fmt::format("Triangulating mesh {} ...", ImporterHelper::UTF8ToNative(fbxNode->GetName())));
         const bool bReplace = true;
         FbxNodeAttribute* convertedNode = Importer::GetInstance()->geometryConverter->Triangulate(fbxMesh, bReplace);
         if (convertedNode != NULL && convertedNode->GetAttributeType() == FbxNodeAttribute::eMesh) {
             fbxMesh = convertedNode->GetNode()->GetMesh();
         } else {
-            LOG_ERROR("三角化网格" + ImporterHelper::UTF8ToNative(fbxNode->GetName()) + "失败。");
+            LOG_ERROR(fmt::format("Failed to triangulate mesh {}.", ImporterHelper::UTF8ToNative(fbxNode->GetName())));
             return nullptr;
         }
     }
@@ -852,7 +852,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
         UVReferenceMode = new FbxLayerElement::EReferenceMode[uniqueUVCount];
         UVMappingMode = new FbxLayerElement::EMappingMode[uniqueUVCount];
     } else {
-        LOG_ERROR("网格" + ImporterHelper::UTF8ToNative(fbxNode->GetName()) + "缺少UV信息，为其创建一个默认的。");
+        LOG_ERROR(fmt::format("Missing uv info for {}, trying to create one.", ImporterHelper::UTF8ToNative(fbxNode->GetName())));
     }
     layerCount = fbxMesh->GetLayerCount();
     for (uint32_t UVIndex = 0; UVIndex < uniqueUVCount; UVIndex++) {
@@ -893,7 +893,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     if (smoothingInfo) {
         if (smoothingInfo->GetMappingMode() == FbxLayerElement::eByEdge) {
             if (!Importer::GetInstance()->geometryConverter->ComputePolygonSmoothingFromEdgeSmoothing(fbxMesh)) {
-                LOG_WARN("转换" + fbxMeshName + "平滑组信息失败。");
+                LOG_WARN(fmt::format("Failed to transfer smooth group info for {}.", fbxMeshName));
                 bSmoothingAvailable = false;
             } else {
                 // After using the geometry converter we always have to get the Layer and the smoothing info
@@ -916,7 +916,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     FbxLayerElementMaterial* layerElementMaterial = baseLayer->GetMaterials();
     FbxLayerElement::EMappingMode materialMappingMode = layerElementMaterial ? layerElementMaterial->GetMappingMode() : FbxLayerElement::eByPolygon;
 
-    uniqueUVCount = Maths::Min<uint32_t>(uniqueUVCount, MAX_TEXCOORDS);
+    uniqueUVCount = Maths::Min<uint32_t>(uniqueUVCount, Configuration::MaxTexCoord);
 
     // One UV set is required but only import up to MAX_TEXCOORDS number of uv layers
     importData->numTexCoords = Maths::Max<uint32_t>(importData->numTexCoords, uniqueUVCount);
@@ -1000,7 +1000,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
         }
 
         if (bInvalidPositionFound) {
-            LOG_WARN("网格" + fbxMeshName + "位置信息中发现非法值NaN或者Inf。");
+            LOG_WARN(fmt::format("Position info for mesh {} contains NaN.", fbxMeshName));
         }
     }
 
@@ -1036,7 +1036,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
                     int lSmoothingIndex = (smoothingReferenceMode == FbxLayerElement::eDirect) ? localIndex : smoothingInfo->GetIndexArray().GetAt(localIndex);
                     triangle.smoothingGroups = smoothingInfo->GetDirectArray().GetAt(lSmoothingIndex);
                 } else {
-                    LOG_ERROR("网格" + fbxMeshName + "中包含不支持的平滑组节点映射信息。");
+                    LOG_ERROR(fmt::format("Mesh {} contains unsupported smoothing group info.", fbxMeshName));
                 }
             }
         }
@@ -1078,7 +1078,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
                 triangle.tangentZ[newVertexIndex] = glm::normalize(triangle.tangentZ[newVertexIndex]);
 
             } else {
-                for (int normalIndex = 0; normalIndex < 3; ++normalIndex) {
+                for (int normalIndex = 0; normalIndex < 3; normalIndex++) {
                     triangle.tangentX[normalIndex] = glm::vec3(0);
                     triangle.tangentY[normalIndex] = glm::vec3(0);
                     triangle.tangentZ[normalIndex] = glm::vec3(0);
@@ -1101,7 +1101,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
                     case FbxLayerElement::eByPolygon: {
                         int index = layerElementMaterial->GetIndexArray().GetAt(localIndex);
                         if (!(index >= 0 && materialMapping.size() > index)) {
-                            LOG_WARN("网格三角面的材质索引不一致，将强制置位0。");
+                            LOG_WARN("Inconsistent material index detected.");
                         } else {
                             triangle.materialIndex = materialMapping[index];
                         }
@@ -1112,7 +1112,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
             // When import morph, we don't check the material index
             // because we don't import material for morph, so the ImportData.Materials contains zero material
             if (!fbxShape && (triangle.materialIndex < 0 || triangle.materialIndex >= fbxMaterials.size())) {
-                LOG_WARN("网格三角面的材质索引不一致，将强制置位0。");
+                LOG_WARN("Inconsistent material index detected.");
                 triangle.materialIndex = 0;
             }
         }
@@ -1146,16 +1146,16 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
                     int UVIndex = (UVReferenceMode[UVLayerIndex] == FbxLayerElement::eDirect) ? UVMapIndex : layerElementUV[UVLayerIndex]->GetIndexArray().GetAt(UVMapIndex);
                     FbxVector2 UVVector = layerElementUV[UVLayerIndex]->GetDirectArray().GetAt(UVIndex);
 
-                    tmpWedges[newVertexIndex].UVs[UVLayerIndex].x = static_cast<float>(UVVector[0]);
-                    tmpWedges[newVertexIndex].UVs[UVLayerIndex].y = 1.f - static_cast<float>(UVVector[1]);
+                    tmpWedges[newVertexIndex].uvs[UVLayerIndex].x = static_cast<float>(UVVector[0]);
+                    tmpWedges[newVertexIndex].uvs[UVLayerIndex].y = 1.f - static_cast<float>(UVVector[1]);
                 }
             } else if (UVLayerIndex == 0) {
                 // Set all UV's to zero.  If we are here the mesh had no UV sets so we only need to do this for the
                 // first UV set which always exists.
 
                 for (int vertexIndex = 0; vertexIndex < 3; vertexIndex++) {
-                    tmpWedges[vertexIndex].UVs[UVLayerIndex].x = 0.0f;
-                    tmpWedges[vertexIndex].UVs[UVLayerIndex].y = 0.0f;
+                    tmpWedges[vertexIndex].uvs[UVLayerIndex].x = 0.0f;
+                    tmpWedges[vertexIndex].uvs[UVLayerIndex].y = 0.0f;
                 }
             }
         }
@@ -1197,8 +1197,8 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
             importData->wedges[w].vertexIndex = tmpWedges[vertexIndex].vertexIndex;
             importData->wedges[w].materialIndex = tmpWedges[vertexIndex].materialIndex;
             importData->wedges[w].color = tmpWedges[vertexIndex].color;
-            for (int CoordIndex = 0; CoordIndex < MAX_TEXCOORDS; CoordIndex++) {
-                importData->wedges[w].UVs[CoordIndex] = tmpWedges[vertexIndex].UVs[CoordIndex];
+            for (int CoordIndex = 0; CoordIndex < Configuration::MaxTexCoord; CoordIndex++) {
+                importData->wedges[w].uvs[CoordIndex] = tmpWedges[vertexIndex].uvs[CoordIndex];
             }
 
             triangle.wedgeIndex[vertexIndex] = w;
@@ -1231,7 +1231,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
                 double* weights = cluster->GetControlPointWeights();
 
                 //	for each vertex index in the cluster
-                for (int controlPointIndex = 0; controlPointIndex < controlPointIndicesCount; ++controlPointIndex) {
+                for (int controlPointIndex = 0; controlPointIndex < controlPointIndicesCount; controlPointIndex++) {
                     importData->influences.push_back(MeshImportData::RawBoneInfluence());
                     importData->influences.back().boneIndex = boneIndex;
                     importData->influences.back().weight = static_cast<float>(weights[controlPointIndex]);
@@ -1246,16 +1246,16 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
             boneIndex = linkFound == sortedLinks.end() ? -1 : static_cast<int>(linkFound - sortedLinks.begin());
 
             //	for each vertex in the mesh
-            for (int ControlPointIndex = 0; ControlPointIndex < controlPointsCount; ++ControlPointIndex) {
+            for (int controlPointIndex = 0; controlPointIndex < controlPointsCount; controlPointIndex++) {
                 importData->influences.push_back(MeshImportData::RawBoneInfluence());
                 importData->influences.back().boneIndex = boneIndex;
                 importData->influences.back().weight = 1.0;
-                importData->influences.back().vertexIndex = existPointNum + ControlPointIndex;
+                importData->influences.back().vertexIndex = existPointNum + controlPointIndex;
             }
         }
     } else {
         //	for each vertex in the mesh
-        for (int controlPointIndex = 0; controlPointIndex < controlPointsCount; ++controlPointIndex) {
+        for (int controlPointIndex = 0; controlPointIndex < controlPointsCount; controlPointIndex++) {
             importData->influences.push_back(MeshImportData::RawBoneInfluence());
             importData->influences.back().boneIndex = -1;
             importData->influences.back().weight = 1.0;
@@ -1292,9 +1292,9 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
             std::vector<int> remapIndex;
             std::vector<MeshImportData::RawMaterial>& newMatList = importData->materials;
             newMatList.clear();
-            for (int ExistingMatIndex = 0; ExistingMatIndex < existingMatList.size(); ++ExistingMatIndex) {
-                if (std::find(usedMaterialIndex.begin(), usedMaterialIndex.end(), (uint8_t)ExistingMatIndex) != usedMaterialIndex.end()) {
-                    newMatList.push_back(existingMatList[ExistingMatIndex]);
+            for (int existingMatIndex = 0; existingMatIndex < existingMatList.size(); existingMatIndex++) {
+                if (std::find(usedMaterialIndex.begin(), usedMaterialIndex.end(), (uint8_t)existingMatIndex) != usedMaterialIndex.end()) {
+                    newMatList.push_back(existingMatList[existingMatIndex]);
                     remapIndex.push_back(static_cast<int>(newMatList.size() - 1));
                 } else {
                     remapIndex.push_back(-1);
@@ -1336,7 +1336,7 @@ std::shared_ptr<MeshImportData> Scene::ImportMesh(FbxNode* fbxNode, FbxMesh* fbx
     const glm::vec3 boundingBoxSize = boundingBox->GetSize();
 
     if (importData->points.size() > 2 && boundingBoxSize.x < THRESH_POINTS_ARE_SAME && boundingBoxSize.y < THRESH_POINTS_ARE_SAME && boundingBoxSize.z < THRESH_POINTS_ARE_SAME) {
-        LOG_ERROR("网格的包围盒小于设定阈值" + std::to_string(THRESH_POINTS_ARE_SAME) + "，将不被导入。");
+        LOG_ERROR(fmt::format("Bouding box with size smaller than {} will be discarded.", THRESH_POINTS_ARE_SAME));
         return nullptr;
     }
 

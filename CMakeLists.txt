@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-set(PROJECT_NAME FBXParser)
+set(PROJECT_NAME FbxParser)
 
 set(COMPILER_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(COMPILER_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
@@ -8,23 +8,27 @@ OPTION(FBX_VENDER_DIR "Optional Fbx SDK path." "")
 
 message("${FBX_VENDER_DIR}")
 
-set(OSX_VERSION "10.9")
+set(OSX_VERSION "10.15")
 
 if (WIN32)
-    project(${PROJECT_NAME} C CXX ASM)
-    set (CMAKE_CXX_STANDARD 14)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_GENERATOR_PLATFORM x64)
+  project(${PROJECT_NAME} C CXX ASM)
+  set (CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_GENERATOR_PLATFORM x64)
+  add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+  add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+  add_definitions(-DUNICODE)
+  add_definitions(-D_UNICODE)
 endif()
 if (APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "${OSX_VERSION}" CACHE STRING "Minimum OS X deployment version")
-    project(${PROJECT_NAME} C CXX OBJC ASM)
-    set(CMAKE_C_FLAGS "-fobjc-arc")
-    set(CMAKE_CXX_FLAGS "-std=c++14 -stdlib=libc++ -fobjc-arc")
-    set(CMAKE_XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC "YES")
-    set(CMAKE_MACOSX_RPATH ON)
-    set(BUILD_RPATH_USE_ORIGIN TRUE)
-    set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "${OSX_VERSION}" CACHE STRING "Minimum OS X deployment version")
+  project(${PROJECT_NAME} C CXX OBJC ASM)
+  set(CMAKE_C_FLAGS "-fobjc-arc")
+  set(CMAKE_CXX_FLAGS "-std=c++17 -stdlib=libc++ -fobjc-arc")
+  set(CMAKE_XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC "YES")
+  set(CMAKE_MACOSX_RPATH ON)
+  set(BUILD_RPATH_USE_ORIGIN TRUE)
+  set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
 endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -36,25 +40,25 @@ set(CMAKE_BUILD_TYPE "MINSIZEREL")
 endif()
 
 file (
-    GLOB_RECURSE fbx_src
-    LIST_DIRECTORIES false
-    "${PROJECT_SOURCE_DIR}/Source/*.cpp"
-    "${PROJECT_SOURCE_DIR}/Source/*.h"
-    )
+  GLOB_RECURSE fbx_src
+  LIST_DIRECTORIES false
+  "${PROJECT_SOURCE_DIR}/Source/*.cpp"
+  "${PROJECT_SOURCE_DIR}/Source/*.h"
+)
 
 foreach(_source IN ITEMS ${fbx_src})
-    if (IS_ABSOLUTE "${_source}")
-        file(RELATIVE_PATH _source_rel "${PROJECT_SOURCE_DIR}" "${_source}")
-    else()
-        set(_source_rel "${_source}")
-    endif()
-    get_filename_component(_source_path "${_source_rel}" PATH)
-    if (WIN32)
-        string(REPLACE "/" "\\" _source_path_replaced "${_source_path}")
-    else()
-        set(_source_path_replaced "${_source_path}")
-    endif()
-    source_group("${_source_path_replaced}" FILES "${_source}")
+  if (IS_ABSOLUTE "${_source}")
+    file(RELATIVE_PATH _source_rel "${PROJECT_SOURCE_DIR}" "${_source}")
+  else()
+    set(_source_rel "${_source}")
+  endif()
+  get_filename_component(_source_path "${_source_rel}" PATH)
+  if (WIN32)
+    string(REPLACE "/" "\\" _source_path_replaced "${_source_path}")
+  else()
+    set(_source_path_replaced "${_source_path}")
+  endif()
+  source_group("${_source_path_replaced}" FILES "${_source}")
 endforeach()
 
 set(LIBRARY_NAME "fbx")
@@ -65,26 +69,25 @@ add_subdirectory(ThirdParty)
 
 if (WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4819")
-else()
-  target_compile_options(${LIBRARY_NAME} PUBLIC -fvisibility=hidden)
-  target_compile_options(${LIBRARY_NAME} PUBLIC -fvisibility-inlines-hidden)
 endif()
 
 target_include_directories(${LIBRARY_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/ThirdParty/ForsythTriOO")
 target_include_directories(${LIBRARY_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/ThirdParty/ext-mikktspace")
 target_include_directories(${LIBRARY_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/ThirdParty/glm")
-target_include_directories(${LIBRARY_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/ThirdParty/filesystem/include")
 target_include_directories(${LIBRARY_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/ThirdParty/spdlog/include")
 target_include_directories(${LIBRARY_NAME} PRIVATE "${PROJECT_SOURCE_DIR}/Source")
 target_link_libraries(${LIBRARY_NAME} "ForsythTriOO")
 target_link_libraries(${LIBRARY_NAME} "ext-mikktspace")
 if(WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4819")
-    target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
-    target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4819")
+  target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
+  target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib)
 else()
-    target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
-    target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/libimage.dylib)
+  target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
+  target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/libimage.dylib)
+    
+  target_compile_options(${LIBRARY_NAME} PUBLIC -fvisibility=hidden)
+  target_compile_options(${LIBRARY_NAME} PUBLIC -fvisibility-inlines-hidden)
 endif()
 
 # Search for FBX sdk package
@@ -125,4 +128,57 @@ set(LIBRARY_PUBLIC_HDRS
 install(FILES ${LIBRARY_PUBLIC_HDRS} DESTINATION "${INSTALL_INC_DIR}")
 if(WIN32)
   install(FILES $<TARGET_PDB_FILE:${LIBRARY_NAME}> DESTINATION bin OPTIONAL)
+endif()
+
+# ============ Test ==============
+
+file (
+  GLOB_RECURSE main_src
+  LIST_DIRECTORIES false
+  "${PROJECT_SOURCE_DIR}/Test/*.cpp"
+  "${PROJECT_SOURCE_DIR}/Test/*.h"
+)
+
+foreach(_source IN ITEMS ${main_src})
+  if (IS_ABSOLUTE "${_source}")
+    file(RELATIVE_PATH _source_rel "${PROJECT_SOURCE_DIR}" "${_source}")
+  else()
+    set(_source_rel "${_source}")
+  endif()
+  get_filename_component(_source_path "${_source_rel}" PATH)
+  if (WIN32)
+    string(REPLACE "/" "\\" _source_path_replaced "${_source_path}")
+  else()
+    set(_source_path_replaced "${_source_path}")
+  endif()
+  source_group("${_source_path_replaced}" FILES "${_source}")
+endforeach()
+
+add_executable(${PROJECT_NAME} ${main_src})
+target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/ThirdParty/rapidjson/include")
+target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/ThirdParty/cxxopts/include")
+target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/ThirdParty/filesystem/include")
+target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/ThirdParty/glm")
+target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/Test")
+target_include_directories(${PROJECT_NAME} PUBLIC "${PROJECT_SOURCE_DIR}/Source")
+if(WIN32)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4819")
+endif()
+target_link_libraries(${PROJECT_NAME} ${LIBRARY_NAME})
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_FILE_DIR:${LIBRARY_NAME}>" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+)
+
+if(WIN32)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/bin "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+  )
+else()
+  set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-Wl,-rpath,./")
+  set_target_properties(${PROJECT_NAME} PROPERTIES CMAKE_BUILD_RPATH "$ORIGIN")
+  set_target_properties(${PROJECT_NAME} PROPERTIES CMAKE_INSTALL_RPATH "$ORIGIN")
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+  )
 endif()

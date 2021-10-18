@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <vector>
+#include "Importer/Scene.h"
 #include "Importer/Mesh.h"
 #include "FbxParser.h"
 #include "FbxParser.private.h"
@@ -96,7 +97,7 @@ public:
 class IMeshBuildInputData {
 public:
     IMeshBuildInputData(const std::vector<Importer::MeshImportData::MeshWedge>& inWedges, const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences,
-                        const std::vector<int>& inPointToOriginalMap, const MeshBuildSettings& inBuildOptions);
+                        const std::vector<int>& inPointToOriginalMap, const std::shared_ptr<Importer::SceneInfo>& sceneInfo, const MeshBuildSettings& inBuildOptions);
 
     uint32_t GetWedgeIndex(uint32_t faceIndex, uint32_t triIndex);
 
@@ -133,6 +134,8 @@ public:
     SMikkTSpaceInterface mikkTInterface;
     MikkTSpace mikkTUserData;
 
+    const std::shared_ptr<Importer::SceneInfo>& sceneInfo;
+
     const std::vector<Importer::MeshImportData::MeshWedge>& wedges;
     const std::vector<Importer::MeshImportData::MeshFace>& faces;
     const std::vector<glm::vec3>& points;
@@ -141,14 +144,15 @@ public:
 };
 
 struct SubMeshVertex {
+    SubMeshVertex(uint32_t maxTexCoord = Configuration::MaxTexCoord);
     glm::vec3 position;
-    glm::vec3 tangentX;             // Tangent, U-direction
-    glm::vec3 tangentY;             // Binormal, V-direction
-    glm::vec3 tangentZ;             // Normal
-    glm::dvec2 UVs[MAX_TEXCOORDS];  // UVs
-    glm::vec4 color;                // VertexColor
-    uint16_t influenceBones[MAX_TOTAL_INFLUENCES];
-    float influenceWeights[MAX_TOTAL_INFLUENCES];
+    glm::vec3 tangentX;           // Tangent, U-direction
+    glm::vec3 tangentY;           // Binormal, V-direction
+    glm::vec3 tangentZ;           // Normal
+    std::vector<glm::dvec2> uvs;  // UVs
+    glm::vec4 color;              // VertexColor
+    std::vector<uint16_t> influenceBones;
+    std::vector<float> influenceWeights;
 };
 
 struct SubMeshVertexWithWedgeIdx : public SubMeshVertex {
@@ -256,7 +260,7 @@ public:
 class MeshBuildInputData : public IMeshBuildInputData {
 public:
     MeshBuildInputData(MeshAsset<>& inModel, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences, const std::vector<Importer::MeshImportData::MeshWedge>& inWedges, const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints,
-                       const std::vector<int>& inPointToOriginalMap, const MeshBuildSettings& inBuildOptions);
+                       const std::vector<int>& inPointToOriginalMap, const std::shared_ptr<Importer::SceneInfo>& inSceneInfo, const MeshBuildSettings& inBuildOptions);
 
     std::vector<std::shared_ptr<OriginSubMesh>> chunks;
 
@@ -265,10 +269,10 @@ public:
 
 class MeshBuilder {
 public:
-    bool Build(std::shared_ptr<Mesh<>> mesh, std::shared_ptr<Importer::MeshImportData> meshImportData, const MeshBuildSettings& options);
+    bool Build(std::shared_ptr<Mesh<>> mesh, std::shared_ptr<Importer::MeshImportData> meshImportData, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& options);
 
     bool BuildMesh(MeshAsset<>& model, const std::string& meshName, const std::vector<Importer::MeshImportData::VertexInfluence>& influences, const std::vector<Importer::MeshImportData::MeshWedge>& wedges, const std::vector<Importer::MeshImportData::MeshFace>& faces,
-                   const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, const MeshBuildSettings& buildOptions);
+                   const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& buildOptions);
 
 private:
     bool GenerateRenderableMesh(MeshBuildInputData& inBuildData);

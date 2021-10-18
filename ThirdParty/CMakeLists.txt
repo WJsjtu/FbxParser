@@ -44,9 +44,10 @@ endfunction()
 
 include("glm.cmake")
 include("ext-mikktspace.cmake")
-include("filesystem.cmake")
 include("image.cmake")
 include("spdlog.cmake")
+include("cxxopts.cmake")
+include("rapidjson.cmake")
 
 add_subdirectory("${PROJECT_SOURCE_DIR}/ThirdParty/ForsythTriOO")
 

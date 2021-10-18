@@ -1,14 +1,13 @@
 ﻿#include "FbxParser.h"
 #include "FbxParser.private.h"
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/stdout_sinks.h"
-#include "spdlog/sinks/rotating_file_sink.h"
 #include <random>
-#define NOMINMAX
-#include "ghc/filesystem.hpp"
+#include <filesystem>
 #include "Importer/Scene.h"
 
 namespace Fbx {
+namespace Configuration {
+uint32_t MaxTexCoord = 4;
+}
 
 AssertException::AssertException(const std::string& msg) : message(msg) {}
 
@@ -81,34 +80,46 @@ EComponentType Animation::GetTypeName() { return EComponentType::Animation; }
 
 namespace Utils {
 
-std::function<void(ELogLevel, std::string)> GlobalLogger = {};
+std::function<void(ELogLevel, std::string)> GlobalLogger = [](ELogLevel, std::string) {};
 
-std::function<void(ELogLevel, std::string)> GetDefaultLogger(const std::string& logFilePath) {
+DefaultLogInstance::DefaultLogInstance(const std::string& logFilePath) {
     auto stdcout_sink = std::make_shared<spdlog::sinks::stdout_sink_mt>();
     stdcout_sink->set_level(spdlog::level::debug);
-    stdcout_sink->set_pattern("[%H:%M:%S %z] [%n] [%^%l%$] [thread %t] %v");
+    stdcout_sink->set_pattern("[%Y-%m-%d %H:%M:%S][thread %t][%^%l%$] %v");
 
     auto stdcerr_sink = std::make_shared<spdlog::sinks::stderr_sink_mt>();
-    stdcerr_sink->set_level(spdlog::level::debug);
-    stdcerr_sink->set_pattern("[%H:%M:%S %z] [%n] [%^%l%$] [thread %t] %v");
+    stdcerr_sink->set_level(spdlog::level::err);
+    stdcerr_sink->set_pattern("[%Y-%m-%d %H:%M:%S][thread %t][%^%l%$] %v");
 
-    auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logFilePath, 16 * 1024 * 1024, 1);
+    auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logFilePath, 16 * 1024 * 1024, 0);
     file_sink->set_level(spdlog::level::debug);
-    file_sink->set_pattern("[%H:%M:%S %z] [%n] [%^%l%$] [thread %t] %v");
+    file_sink->set_pattern("[%Y-%m-%d %H:%M:%S][thread %t][%^%l%$] %v");
 
-    spdlog::logger logger("multi_sink", {stdcout_sink, stdcerr_sink, file_sink});
-    logger.set_level(spdlog::level::debug);
+    logger = std::shared_ptr<spdlog::logger>{new spdlog::logger("multi_sink", {stdcout_sink, stdcerr_sink, file_sink})};
+    logger->set_level(spdlog::level::debug);
+}
 
-    return [&logger](ELogLevel level, std::string message) {
-        switch (level) {
-            case Fbx::Utils::ELogLevel::Info: logger.info(message); break;
-            case Fbx::Utils::ELogLevel::Error: logger.error(message); break;
-            case Fbx::Utils::ELogLevel::Warn: logger.warn(message); break;
-            case Fbx::Utils::ELogLevel::Critical: logger.critical(message); break;
-            case Fbx::Utils::ELogLevel::Debug: logger.debug(message); break;
-            default: break;
-        }
-    };
+void DefaultLogInstance::Log(ELogLevel level, std::string message) {
+    if (!logger) {
+        return;
+    }
+    switch (level) {
+        case Fbx::Utils::ELogLevel::Info: logger->info(message); break;
+        case Fbx::Utils::ELogLevel::Error: logger->error(message); break;
+        case Fbx::Utils::ELogLevel::Warn: logger->warn(message); break;
+        case Fbx::Utils::ELogLevel::Critical: logger->critical(message); break;
+        case Fbx::Utils::ELogLevel::Debug: logger->debug(message); break;
+        default: break;
+    }
+}
+
+std::map<std::string, std::shared_ptr<DefaultLogInstance>> Loggers;
+
+std::function<void(ELogLevel, std::string)> GetDefaultLogger(const std::string& logFilePath) {
+    if (Loggers.find(logFilePath) == Loggers.end()) {
+        Loggers.emplace(logFilePath, std::make_shared<DefaultLogInstance>(logFilePath));
+    }
+    return std::bind(&DefaultLogInstance::Log, Loggers[logFilePath], std::placeholders::_1, std::placeholders::_2);
 }
 
 std::function<void(ELogLevel, std::string)> GetGlobalLogger() { return GlobalLogger; }
@@ -292,7 +303,7 @@ Box::Box(const glm::vec3& inMin, const glm::vec3& inMax) : min(inMin), max(inMax
 Box::Box(const std::vector<glm::vec3>& points) {
     min = max = glm::vec3(0, 0, 0);
     bIsValid = true;
-    for (int i = 0; i < points.size(); ++i) {
+    for (int i = 0; i < points.size(); i++) {
         *this += points[i];
     }
 }
@@ -442,18 +453,30 @@ std::string SanitizeInvalidChars(const std::string& inText, const char* invalidC
     return SanitizedText;
 }
 
-bool EnsurePath(const std::string& path) {
-    std::string dir_path = ghc::filesystem::path(path).parent_path().generic_string();
-    if (!ghc::filesystem::exists(dir_path) || !ghc::filesystem::is_directory(dir_path)) {
-        try {
-            return ghc::filesystem::create_directories(dir_path);
-        } catch (ghc::filesystem::filesystem_error error) {
-            return false;
-        } catch (...) {
-            return false;
-        }
+bool ExistPath(const std::string& path) {
+    try {
+        return std::filesystem::exists(path);
+    } catch (std::filesystem::filesystem_error error) {
+        std::cerr << "[std::filesystem::filesystem_error]: " << error.what() << std::endl;
+        return false;
+    } catch (...) {
+        return false;
     }
-    return true;
+}
+
+bool EnsurePath(const std::string& path) {
+    std::string dir_path = std::filesystem::path(path).parent_path().generic_string();
+    try {
+        if (!ExistPath(dir_path) || !std::filesystem::is_directory(dir_path)) {
+            return std::filesystem::create_directories(dir_path);
+        }
+        return true;
+    } catch (std::filesystem::filesystem_error error) {
+        std::cerr << "[std::filesystem::filesystem_error]: " << error.what() << std::endl;
+        return false;
+    } catch (...) {
+        return false;
+    }
 }
 
 std::string SanitizeObjectName(const std::string& inObjectName) { return SanitizeInvalidChars(inObjectName, INVALID_OBJECTNAME_CHARACTERS); }
@@ -464,19 +487,15 @@ std::string ANSItoUTF8(std::string& strAnsi) {
 #ifdef _DEBUG
     return strAnsi;
 #else
-    //获取转换为宽字节后需要的缓冲区大小，创建宽字节缓冲区，936为简体中文GB2312代码页
-    UINT nLen = MultiByteToWideChar(936, NULL, strAnsi.data(), -1, NULL, NULL);
+    UINT nLen = MultiByteToWideChar(CP_ACP, NULL, strAnsi.data(), -1, NULL, NULL);
     WCHAR* wszBuffer = new WCHAR[nLen + 1];
-    nLen = MultiByteToWideChar(936, NULL, strAnsi.data(), -1, wszBuffer, nLen);
+    nLen = MultiByteToWideChar(CP_ACP, NULL, strAnsi.data(), -1, wszBuffer, nLen);
     wszBuffer[nLen] = 0;
-    //获取转为UTF8多字节后需要的缓冲区大小，创建多字节缓冲区
     nLen = WideCharToMultiByte(CP_UTF8, NULL, wszBuffer, -1, NULL, NULL, NULL, NULL);
     CHAR* szBuffer = new CHAR[nLen + 1];
     nLen = WideCharToMultiByte(CP_UTF8, NULL, wszBuffer, -1, szBuffer, nLen, NULL, NULL);
     szBuffer[nLen] = 0;
-
     strAnsi = std::string(szBuffer);
-    //内存清理
     delete[] wszBuffer;
     delete[] szBuffer;
     return strAnsi;
@@ -487,7 +506,7 @@ std::string ANSItoUTF8(std::string& strAnsi) {
 bool InsensitiveCaseEquals(const std::string& a, const std::string& b) {
     unsigned int sz = a.size();
     if (b.size() != sz) return false;
-    for (unsigned int i = 0; i < sz; ++i)
+    for (unsigned int i = 0; i < sz; i++)
         if (tolower(a[i]) != tolower(b[i])) return false;
     return true;
 }
@@ -516,11 +535,11 @@ std::string CleanIllegalChar(const std::string& str, bool heightLevel) {
 
 std::pair<std::shared_ptr<FbxInfo>, std::shared_ptr<Objects::Entity>> ParseFbx(const std::string& filePath, std::shared_ptr<Options> options) {
     auto iptr = Fbx::Importer::Importer::GetInstance();
-    auto info = iptr->GetFileSceneInfo(Fbx::Importer::ImporterHelper::NativeToUTF8(filePath), options);
+    auto info = iptr->GetFileSceneInfo(filePath, options);
     if (info) {
         auto scene = iptr->ImportScene(info, options);
         if (scene) {
-            scene->root->name = ghc::filesystem::path(filePath).stem().generic_string();
+            scene->root->name = std::filesystem::path(filePath).stem().generic_string();
             std::shared_ptr<FbxInfo> fbxInfo = std::make_shared<FbxInfo>();
             fbxInfo->fileVersion = info->FbxFileVersion;
             fbxInfo->fileCreator = info->FbxFileCreator;

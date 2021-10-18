@@ -214,48 +214,10 @@ private:
     std::vector<glm::mat4> CachedComposedRefPoseMatrices;
 
 public:
-    glm::mat4 GetRefPoseMatrix(int BoneIndex) const {
-        ASSERT(BoneIndex >= 0 && BoneIndex < skeleton.GetBoneNum());
-        Maths::Transform BoneTransform = skeleton.GetBonePose()[BoneIndex];
-        // Make sure quaternion is normalized!
-        BoneTransform.NormalizeRotation();
-        return BoneTransform.ToMatrixWithScale();
-    }
+    glm::mat4 GetRefPoseMatrix(int BoneIndex) const;
 
     // Pre-calculate refpose-to-local transforms
-    void CalculateInvRefMatrices() {
-        const int numRealBones = skeleton.GetBoneNum();
-
-        if (boneInverseMatrices.size() != numRealBones) {
-            boneInverseMatrices.resize(numRealBones, glm::mat4(0));
-
-            // Reset cached mesh-space ref pose
-            CachedComposedRefPoseMatrices.resize(numRealBones, glm::mat4(0));
-
-            // Precompute the Mesh.RefBasesInverse.
-            for (int b = 0; b < numRealBones; b++) {
-                // Render the default pose.
-                CachedComposedRefPoseMatrices[b] = GetRefPoseMatrix(b);
-
-                // Construct mesh-space skeletal hierarchy.
-                if (b > 0) {
-                    int Parent = skeleton.GetParentIndex(b);
-                    CachedComposedRefPoseMatrices[b] = CachedComposedRefPoseMatrices[Parent] * CachedComposedRefPoseMatrices[b];
-                }
-
-                glm::vec3 XAxis, YAxis, ZAxis;
-
-                Maths::GetMatrixScaledAxes(CachedComposedRefPoseMatrices[b], XAxis, YAxis, ZAxis);
-                if (Maths::IsNearlyZero(XAxis, SMALL_NUMBER) && Maths::IsNearlyZero(YAxis, SMALL_NUMBER) && Maths::IsNearlyZero(ZAxis, SMALL_NUMBER)) {
-                    // this is not allowed, warn them
-                    LOG_WARN("Reference Pose for asset " + name + " for joint (" + skeleton.GetBoneInfo()[b].name + ") includes NIL matrix. Zero scale isn't allowed on ref pose. ");
-                }
-
-                // Precompute inverse so we can use from-refpose-skin vertices.
-                boneInverseMatrices[b] = glm::inverse(CachedComposedRefPoseMatrices[b]);
-            }
-        }
-    }
+    void CalculateInvRefMatrices();
 };
 
 struct SkinnedSubMesh : public OriginSubMesh {
@@ -266,7 +228,7 @@ struct SkinnedSubMesh : public OriginSubMesh {
 class SkinnedMeshBuildInputData : public IMeshBuildInputData {
 public:
     SkinnedMeshBuildInputData(SkinnedMeshAsset& inModel, const SkinnedMeshSkeleton& inSkeleton, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences, const std::vector<Importer::MeshImportData::MeshWedge>& inWedges,
-                              const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints, const std::vector<int>& inPointToOriginalMap, const MeshBuildSettings& inBuildOptions);
+                              const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints, const std::vector<int>& inPointToOriginalMap, const std::shared_ptr<Importer::SceneInfo>& inSceneInfo, const MeshBuildSettings& inBuildOptions);
 
     std::vector<std::shared_ptr<SkinnedSubMesh>> chunks;
 
@@ -276,10 +238,10 @@ public:
 
 class SkinnedMeshBuilder {
 public:
-    bool Build(std::shared_ptr<SkinnedMesh> skeletalMesh, std::shared_ptr<Importer::MeshImportData> meshImportData, const MeshBuildSettings& options);
+    bool Build(std::shared_ptr<SkinnedMesh> skeletalMesh, std::shared_ptr<Importer::MeshImportData> meshImportData, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& options);
 
     bool BuildSkinnedMesh(SkinnedMeshAsset& model, const std::string& skeletalMeshName, const SkinnedMeshSkeleton& skeleton, const std::vector<Importer::MeshImportData::VertexInfluence>& influences, const std::vector<Importer::MeshImportData::MeshWedge>& wedges,
-                          const std::vector<Importer::MeshImportData::MeshFace>& faces, const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, const MeshBuildSettings& buildOptions);
+                          const std::vector<Importer::MeshImportData::MeshFace>& faces, const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& buildOptions);
 
 private:
     bool GenerateRenderableSkinnedMesh(SkinnedMeshBuildInputData& inBuildData);

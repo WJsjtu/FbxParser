@@ -5,6 +5,8 @@
 
 namespace Fbx { namespace Builder {
 
+SubMeshVertex::SubMeshVertex(uint32_t maxTexCoord) { uvs.resize(maxTexCoord); }
+
 MikkTSpace::MikkTSpace(const std::vector<Importer::MeshImportData::MeshWedge>& wedges, const std::vector<Importer::MeshImportData::MeshFace>& faces, const std::vector<glm::vec3>& Points, bool bInComputeNormals, std::vector<glm::vec3>& vertexTangentsX, std::vector<glm::vec3>& vertexTangentsY,
                        std::vector<glm::vec3>& vertexTangentsZ)
     : wedges(wedges), faces(faces), points(Points), bComputeNormals(bInComputeNormals), tangentsX(vertexTangentsX), tangentsY(vertexTangentsY), tangentsZ(vertexTangentsZ) {}
@@ -20,11 +22,11 @@ int MikkGetNumVertsOfFace(const SMikkTSpaceContext* context, const int faceIdx) 
 }
 
 void MikkGetPosition(const SMikkTSpaceContext* context, float position[3], const int faceIdx, const int vertIdx) {
-    MikkTSpace* UserData = (MikkTSpace*)(context->m_pUserData);
-    const glm::vec3& VertexPosition = UserData->points[UserData->wedges[UserData->faces[faceIdx].iWedge[vertIdx]].iVertex];
-    position[0] = VertexPosition.x;
-    position[1] = VertexPosition.y;
-    position[2] = VertexPosition.z;
+    MikkTSpace* userData = (MikkTSpace*)(context->m_pUserData);
+    const glm::vec3& vertexPosition = userData->points[userData->wedges[userData->faces[faceIdx].iWedge[vertIdx]].iVertex];
+    position[0] = vertexPosition.x;
+    position[1] = vertexPosition.y;
+    position[2] = vertexPosition.z;
 }
 
 void MikkGetNormal(const SMikkTSpaceContext* context, float normal[3], const int faceIdx, const int vertIdx) {
@@ -36,10 +38,10 @@ void MikkGetNormal(const SMikkTSpaceContext* context, float normal[3], const int
         normal[1] = vertexNormal.y;
         normal[2] = vertexNormal.z;
     } else {
-        const glm::vec3& VertexNormal = userData->faces[faceIdx].tangentZ[vertIdx];
-        normal[0] = VertexNormal.x;
-        normal[1] = VertexNormal.y;
-        normal[2] = VertexNormal.z;
+        const glm::vec3& vertexNormal = userData->faces[faceIdx].tangentZ[vertIdx];
+        normal[0] = vertexNormal.x;
+        normal[1] = vertexNormal.y;
+        normal[2] = vertexNormal.z;
     }
 }
 
@@ -65,7 +67,7 @@ void MikkSetTSpaceBasic(const SMikkTSpaceContext* context, const float tangent[3
 
 void MikkGetTexCoord(const SMikkTSpaceContext* context, float UV[2], const int faceIdx, const int vertIdx) {
     MikkTSpace* userData = (MikkTSpace*)(context->m_pUserData);
-    const glm::dvec2& texCoord = userData->wedges[userData->faces[faceIdx].iWedge[vertIdx]].UVs[0];
+    const glm::dvec2& texCoord = userData->wedges[userData->faces[faceIdx].iWedge[vertIdx]].uvs[0];
     UV[0] = static_cast<float>(texCoord.x);
     UV[1] = static_cast<float>(texCoord.y);
 }
@@ -192,8 +194,8 @@ bool PointsEqual(const glm::vec3& v1, const glm::vec3& v2, float comparisonThres
 }
 
 bool PointsEqual(const glm::vec3& v1, const glm::vec3& v2, bool bUseEpsilonCompare) {
-    const float Epsilon = bUseEpsilonCompare ? THRESH_POINTS_ARE_SAME : 0.0f;
-    return Maths::Abs(v1.x - v2.x) <= Epsilon && Maths::Abs(v1.y - v2.y) <= Epsilon && Maths::Abs(v1.z - v2.z) <= Epsilon;
+    const float epsilon = bUseEpsilonCompare ? THRESH_POINTS_ARE_SAME : 0.0f;
+    return Maths::Abs(v1.x - v2.x) <= epsilon && Maths::Abs(v1.y - v2.y) <= epsilon && Maths::Abs(v1.z - v2.z) <= epsilon;
 }
 
 bool UVsEqual(const glm::dvec2& v1, const glm::dvec2& v2, float epsilon = 1.0f / 1024.0f) { return Maths::Abs(v1.x - v2.x) <= epsilon && Maths::Abs(v1.y - v2.y) <= epsilon; }
@@ -243,7 +245,7 @@ void CreateOrthonormalBasis(glm::vec3& xAxis, glm::vec3& yAxis, glm::vec3& zAxis
 void ForsythHelper::CacheOptimizeIndexBuffer(std::vector<uint32_t>& indices) {
     // Count the number of vertices
     uint32_t numVertices = 0;
-    for (uint32_t index = 0; index < indices.size(); ++index) {
+    for (uint32_t index = 0; index < indices.size(); index++) {
         if (indices[index] > numVertices) {
             numVertices = indices[index];
         }
@@ -254,7 +256,7 @@ void ForsythHelper::CacheOptimizeIndexBuffer(std::vector<uint32_t>& indices) {
     uint32_t CacheSize = 32;
     Forsyth::OptimizeFaces(indices.data(), static_cast<uint32_t>(indices.size()), numVertices, optimizedIndices.data(), CacheSize);
 
-    for (int i = 0; i < optimizedIndices.size(); ++i) {
+    for (int i = 0; i < optimizedIndices.size(); i++) {
         indices[i] = optimizedIndices[i];
     }
 }
@@ -304,8 +306,8 @@ bool NormalsEqual(const glm::vec3& v1, const glm::vec3& v2, const MeshBuildSetti
 }
 
 IMeshBuildInputData::IMeshBuildInputData(const std::vector<Importer::MeshImportData::MeshWedge>& inWedges, const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences,
-                                         const std::vector<int>& inPointToOriginalMap, const MeshBuildSettings& inBuildOptions)
-    : mikkTUserData(inWedges, inFaces, inPoints, inBuildOptions.bRecomputeNormals, tangentX, tangentY, tangentZ), wedges(inWedges), faces(inFaces), points(inPoints), influences(inInfluences), pointToOriginalMap(inPointToOriginalMap), buildOptions(inBuildOptions) {
+                                         const std::vector<int>& inPointToOriginalMap, const std::shared_ptr<Importer::SceneInfo>& inSceneInfo, const MeshBuildSettings& inBuildOptions)
+    : mikkTUserData(inWedges, inFaces, inPoints, inBuildOptions.bRecomputeNormals, tangentX, tangentY, tangentZ), wedges(inWedges), faces(inFaces), points(inPoints), influences(inInfluences), pointToOriginalMap(inPointToOriginalMap), sceneInfo(inSceneInfo), buildOptions(inBuildOptions) {
     mikkTInterface.m_getNormal = MikkGetNormal;
     mikkTInterface.m_getNumFaces = MikkGetNumFaces;
     mikkTInterface.m_getNumVerticesOfFace = MikkGetNumVertsOfFace;
@@ -330,7 +332,7 @@ IMeshBuildInputData::IMeshBuildInputData(const std::vector<Importer::MeshImportD
         }
 
         for (const Importer::MeshImportData::MeshFace& meshFace : faces) {
-            for (int cornerIndex = 0; cornerIndex < 3; ++cornerIndex) {
+            for (int cornerIndex = 0; cornerIndex < 3; cornerIndex++) {
                 uint32_t WedgeIndex = meshFace.iWedge[cornerIndex];
                 if (!inBuildOptions.bRecomputeTangents) {
                     tangentX[WedgeIndex] = meshFace.tangentX[cornerIndex];
@@ -354,7 +356,7 @@ glm::vec3 IMeshBuildInputData::GetVertexPosition(uint32_t wedgeIndex) { return p
 
 glm::vec3 IMeshBuildInputData::GetVertexPosition(uint32_t faceIndex, uint32_t triIndex) { return points[wedges[faces[faceIndex].iWedge[triIndex]].iVertex]; }
 
-glm::dvec2 IMeshBuildInputData::GetVertexUV(uint32_t faceIndex, uint32_t triIndex, uint32_t UVIndex) { return wedges[faces[faceIndex].iWedge[triIndex]].UVs[UVIndex]; }
+glm::dvec2 IMeshBuildInputData::GetVertexUV(uint32_t faceIndex, uint32_t triIndex, uint32_t UVIndex) { return wedges[faces[faceIndex].iWedge[triIndex]].uvs[UVIndex]; }
 
 uint32_t IMeshBuildInputData::GetFaceSmoothingGroups(uint32_t faceIndex) { return faces[faceIndex].smoothingGroups; }
 
@@ -380,10 +382,10 @@ void FindOverlappingCorners(std::shared_ptr<OverlappingCorners> outOverlappingCo
 
     // Create a list of vertex Z/index pairs
     std::vector<IndexAndZ> vertIndexAndZ;
-    for (int FaceIndex = 0; FaceIndex < numFaces; FaceIndex++) {
-        for (int TriIndex = 0; TriIndex < 3; ++TriIndex) {
-            uint32_t Index = buildData.GetWedgeIndex(FaceIndex, TriIndex);
-            vertIndexAndZ.push_back(IndexAndZ(Index, buildData.GetVertexPosition(Index)));
+    for (int faceIndex = 0; faceIndex < numFaces; faceIndex++) {
+        for (int triIndex = 0; triIndex < 3; triIndex++) {
+            uint32_t index = buildData.GetWedgeIndex(faceIndex, triIndex);
+            vertIndexAndZ.push_back(IndexAndZ(index, buildData.GetVertexPosition(index)));
         }
     }
 
@@ -420,8 +422,11 @@ void ComputeTriangleTangents(std::vector<glm::vec3>& triangleTangentX, std::vect
         const int UVIndex = 0;
         glm::vec3 p[3];
 
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < 3; i++) {
             p[i] = buildData.GetVertexPosition(triangleIndex, i);
+            if (buildData.sceneInfo->scaleFactor != 1.0f) {
+                p[i] /= buildData.sceneInfo->scaleFactor;
+            }
         }
 
         // get safe normal should have return a valid normalized vector or a zero vector.
@@ -469,7 +474,7 @@ void AddAdjacentFace(IMeshBuildInputData& buildData, std::vector<bool>& faceAdde
         int vertexIndex = buildData.GetVertexIndex(faceIndex, corner);
         ASSERT(vertexIndexToAdjacentFaces.find(vertexIndex) != vertexIndexToAdjacentFaces.end());
         std::vector<int>& adjacentFaces = vertexIndexToAdjacentFaces[vertexIndex];
-        for (int adjacentFaceArrayIndex = 0; adjacentFaceArrayIndex < adjacentFaces.size(); ++adjacentFaceArrayIndex) {
+        for (int adjacentFaceArrayIndex = 0; adjacentFaceArrayIndex < adjacentFaces.size(); adjacentFaceArrayIndex++) {
             int adjacentFaceIndex = adjacentFaces[adjacentFaceArrayIndex];
             if (!faceAdded[adjacentFaceIndex] && adjacentFaceIndex != faceIndex) {
                 bool bAddConnected = !bConnectByEdge;
@@ -497,11 +502,11 @@ void FillPolygonPatch(IMeshBuildInputData& buildData, std::vector<int>& faceInde
     int patchIndex = 0;
 
     std::map<int, std::vector<int>> vertexIndexToAdjacentFaces;
-    for (int faceIndex = 0; faceIndex < numTriangles; ++faceIndex) {
+    for (int faceIndex = 0; faceIndex < numTriangles; faceIndex++) {
         int wedgeOffset = faceIndex * 3;
         for (int corner = 0; corner < 3; corner++) {
-            int VertexIndex = buildData.GetVertexIndex(faceIndex, corner);
-            std::vector<int>& AdjacentFaces = vertexIndexToAdjacentFaces[VertexIndex];
+            int vertexIndex = buildData.GetVertexIndex(faceIndex, corner);
+            std::vector<int>& AdjacentFaces = vertexIndexToAdjacentFaces[vertexIndex];
             if (std::find(AdjacentFaces.begin(), AdjacentFaces.end(), faceIndex) == AdjacentFaces.end()) {
                 AdjacentFaces.push_back(faceIndex);
             }
@@ -512,7 +517,7 @@ void FillPolygonPatch(IMeshBuildInputData& buildData, std::vector<int>& faceInde
     std::vector<bool> faceAdded(numTriangles, false);
 
     std::vector<int> triangleQueue;
-    for (int faceIndex = 0; faceIndex < numTriangles; ++faceIndex) {
+    for (int faceIndex = 0; faceIndex < numTriangles; faceIndex++) {
         if (faceAdded[faceIndex]) {
             continue;
         }
@@ -520,10 +525,10 @@ void FillPolygonPatch(IMeshBuildInputData& buildData, std::vector<int>& faceInde
         triangleQueue.push_back(faceIndex);  // Use a queue to avoid recursive function
         faceAdded[faceIndex] = true;
         while (triangleQueue.size() > 0) {
-            int CurrentTriangleIndex = triangleQueue.back();
+            int currentTriangleIndex = triangleQueue.back();
             triangleQueue.pop_back();
-            faceIndexToPatchIndex[CurrentTriangleIndex] = patchIndex;
-            AddAdjacentFace(buildData, faceAdded, vertexIndexToAdjacentFaces, CurrentTriangleIndex, triangleQueue, bConnectByEdge);
+            faceIndexToPatchIndex[currentTriangleIndex] = patchIndex;
+            AddAdjacentFace(buildData, faceAdded, vertexIndexToAdjacentFaces, currentTriangleIndex, triangleQueue, bConnectByEdge);
         }
         patchIndex++;
     }
@@ -533,10 +538,10 @@ bool IsTriangleMirror(IMeshBuildInputData& buildData, const std::vector<glm::vec
     if (faceIdxA == faceIdxB) {
         return false;
     }
-    for (int cornerA = 0; cornerA < 3; ++cornerA) {
+    for (int cornerA = 0; cornerA < 3; cornerA++) {
         const glm::vec3& cornerAPosition = buildData.GetVertexPosition((faceIdxA * 3) + cornerA);
         bool bFoundMatch = false;
-        for (int cornerB = 0; cornerB < 3; ++cornerB) {
+        for (int cornerB = 0; cornerB < 3; cornerB++) {
             const glm::vec3& cornerBPosition = buildData.GetVertexPosition((faceIdxB * 3) + cornerB);
             if (PointsEqual(cornerAPosition, cornerBPosition, buildData.buildOptions)) {
                 bFoundMatch = true;
@@ -840,7 +845,7 @@ void ComputeTangents(const std::string& skinnedMeshName, IMeshBuildInputData& bu
                 // We also notify the log that we compute a zero length normals, so the user is aware of it
                 if (!bIsZeroLengthNormalErrorMessageDisplayed) {
                     bIsZeroLengthNormalErrorMessageDisplayed = true;
-                    LOG_WARN("检测到零向量法线.");
+                    LOG_WARN("Mesh contains zero normal vector.");
                 }
             }
         };
@@ -882,8 +887,8 @@ bool AreMeshVerticesEqual(const SubMeshVertexWithWedgeIdx& v1, const SubMeshVert
         return false;
     }
 
-    for (int UVIdx = 0; UVIdx < MAX_TEXCOORDS; ++UVIdx) {
-        if (!UVsEqual(v1.UVs[UVIdx], v2.UVs[UVIdx], buildOptions)) {
+    for (int UVIdx = 0; UVIdx < Configuration::MaxTexCoord; UVIdx++) {
+        if (!UVsEqual(v1.uvs[UVIdx], v2.uvs[UVIdx], buildOptions)) {
             return false;
         }
     }
@@ -900,8 +905,12 @@ bool AreMeshVerticesEqual(const SubMeshVertexWithWedgeIdx& v1, const SubMeshVert
         return false;
     }
 
+    if (v1.influenceBones.size() != v2.influenceBones.size()) {
+        return false;
+    }
+
     bool influencesMatch = 1;
-    for (uint32_t influenceIndex = 0; influenceIndex < MAX_TOTAL_INFLUENCES; influenceIndex++) {
+    for (uint32_t influenceIndex = 0; influenceIndex < v1.influenceBones.size(); influenceIndex++) {
         if (v1.influenceBones[influenceIndex] != v2.influenceBones[influenceIndex] || v1.influenceWeights[influenceIndex] != v2.influenceWeights[influenceIndex]) {
             influencesMatch = 0;
             break;
@@ -920,10 +929,10 @@ bool AreMeshVerticesEqual(const SubMeshVertexWithWedgeIdx& v1, const SubMeshVert
 }
 
 MeshBuildInputData::MeshBuildInputData(MeshAsset<>& inModel, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences, const std::vector<Importer::MeshImportData::MeshWedge>& inWedges, const std::vector<Importer::MeshImportData::MeshFace>& inFaces,
-                                       const std::vector<glm::vec3>& inPoints, const std::vector<int>& inPointToOriginalMap, const MeshBuildSettings& inBuildOptions)
-    : IMeshBuildInputData(inWedges, inFaces, inPoints, inInfluences, inPointToOriginalMap, inBuildOptions), model(inModel) {}
+                                       const std::vector<glm::vec3>& inPoints, const std::vector<int>& inPointToOriginalMap, const std::shared_ptr<Importer::SceneInfo>& inSceneInfo, const MeshBuildSettings& inBuildOptions)
+    : IMeshBuildInputData(inWedges, inFaces, inPoints, inInfluences, inPointToOriginalMap, inSceneInfo, inBuildOptions), model(inModel) {}
 
-bool MeshBuilder::Build(std::shared_ptr<Mesh<>> mesh, std::shared_ptr<Importer::MeshImportData> meshImportData, const MeshBuildSettings& options) {
+bool MeshBuilder::Build(std::shared_ptr<Mesh<>> mesh, std::shared_ptr<Importer::MeshImportData> meshImportData, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& options) {
     std::vector<glm::vec3> points;
     std::vector<Importer::MeshImportData::MeshWedge> wedges;
     std::vector<Importer::MeshImportData::MeshFace> faces;
@@ -941,8 +950,8 @@ bool MeshBuilder::Build(std::shared_ptr<Mesh<>> mesh, std::shared_ptr<Importer::
     for (int w = 0; w < meshImportData->wedges.size(); w++) {
         wedges[w].iVertex = meshImportData->wedges[w].vertexIndex;
         // Copy all texture coordinates
-        for (int i = 0; i < MAX_TEXCOORDS; i++) {
-            wedges[w].UVs[i] = meshImportData->wedges[w].UVs[i];
+        for (int i = 0; i < Configuration::MaxTexCoord; i++) {
+            wedges[w].uvs[i] = meshImportData->wedges[w].uvs[i];
         }
         wedges[w].color = meshImportData->wedges[w].color;
     }
@@ -989,7 +998,7 @@ bool MeshBuilder::Build(std::shared_ptr<Mesh<>> mesh, std::shared_ptr<Importer::
 
     std::shared_ptr<MeshAsset<>> model = std::make_shared<MeshAsset<>>();
 
-    BuildMesh(*model, mesh->name, influences, wedges, faces, points, pointToRawMap, options);
+    BuildMesh(*model, mesh->name, influences, wedges, faces, points, pointToRawMap, sceneInfo, options);
 
     mesh->asset = model;
 
@@ -1018,7 +1027,7 @@ bool MeshBuilder::GenerateRenderableMesh(MeshBuildInputData& buildData) {
         // Only update the status progress bar if we are in the game thread and every thousand faces.
         // Updating status is extremely slow
         if (faceIndex % 5000 == 0) {
-            LOG_INFO("正在处理" + std::to_string(faceIndex) + "/" + std::to_string(buildData.faces.size()) + "个三角面。");
+            LOG_INFO(fmt::format("Processing triangles: {:d}/{:d} .", faceIndex + 1, buildData.faces.size()));
         }
 
         const Importer::MeshImportData::MeshFace& Face = buildData.faces[faceIndex];
@@ -1044,8 +1053,8 @@ bool MeshBuilder::GenerateRenderableMesh(MeshBuildInputData& buildData) {
             vertex.tangentY = tangentY;
             vertex.tangentZ = tangentZ;
 
-            for (int ii = 0; ii < MAX_TEXCOORDS; ii++) {
-                vertex.UVs[ii] = wedge.UVs[ii];
+            for (int ii = 0; ii < Configuration::MaxTexCoord; ii++) {
+                vertex.uvs[ii] = wedge.uvs[ii];
             }
             vertex.color = wedge.color;
 
@@ -1087,7 +1096,7 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
     model.indexBuffer.clear();
 
     // Setup the section and chunk arrays on the model.
-    for (int chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
+    for (int chunkIndex = 0; chunkIndex < chunks.size(); chunkIndex++) {
         std::shared_ptr<OriginSubMesh> srcChunk = chunks[chunkIndex];
         model.sections.push_back(SubMeshAsset());
         SubMeshAsset& section = model.sections.back();
@@ -1114,7 +1123,7 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
 
     // rearrange the vert order to minimize the data fetched by the GPU
     for (int sectionIndex = 0; sectionIndex < model.sections.size(); sectionIndex++) {
-        LOG_INFO("正在处理网格分块" + std::to_string(sectionIndex) + "/" + std::to_string(model.sections.size()) + "。");
+        LOG_INFO(fmt::format("Processing sections {}/{} .", sectionIndex + 1, model.sections.size()));
 
         std::shared_ptr<OriginSubMesh> srcChunk = chunks[sectionIndex];
         SubMeshAsset& section = model.sections[sectionIndex];
@@ -1140,7 +1149,7 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
             const int cachedIndex = indexCache[originalIndex];
 
             if (cachedIndex == -1) {
-                // No new index has been allocated for this existing index, assign a new one
+                // No new index has been allocated for this existing index, assign one
                 chunkIndices[index] = nextAvailableIndex;
                 // Mark what this index has been assigned to
                 indexCache[originalIndex] = nextAvailableIndex;
@@ -1158,7 +1167,7 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
     for (int sectionIndex = 0; sectionIndex < model.sections.size(); sectionIndex++) {
         SubMeshAsset& section = model.sections[sectionIndex];
         std::vector<SubMeshVertexWithWedgeIdx>& chunkVertices = chunks[sectionIndex]->vertices;
-        LOG_INFO("正在处理分块。");
+        LOG_INFO(fmt::format("Building sections {}/{} .", sectionIndex + 1, model.sections.size()));
 
         currentVertexIndex = 0;
         currentChunkVertexCount = 0;
@@ -1183,8 +1192,8 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
             newVertex.tangentX = softVertex.tangentX;
             newVertex.tangentY = softVertex.tangentY;
             newVertex.tangentZ = glm::vec4(softVertex.tangentZ.x, softVertex.tangentZ.y, softVertex.tangentZ.z, 1);
-            for (int ii = 0; ii < MAX_TEXCOORDS; ii++) {
-                newVertex.UVs[ii] = softVertex.UVs[ii];
+            for (int ii = 0; ii < Configuration::MaxTexCoord; ii++) {
+                newVertex.uvs[ii] = softVertex.uvs[ii];
             }
             newVertex.color = softVertex.color;
             section.vertices.push_back(newVertex);
@@ -1202,7 +1211,7 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
         section.numVertices = static_cast<int>(section.vertices.size());
 
         // Log info about the chunk.
-        LOG_INFO("分块" + std::to_string(sectionIndex) + "：" + std::to_string(section.numVertices) + "个顶点。");
+        LOG_INFO(fmt::format("Section {:d} has {:d} vertcies.", sectionIndex + 1, section.numVertices));
     }
 
     // Copy raw point indices to LOD model.
@@ -1221,13 +1230,13 @@ void BuildMeshModelFromChunks(MeshAsset<>& model, std::vector<std::shared_ptr<Or
         const int numIndices = static_cast<int>(sectionIndices.size());
         const std::vector<uint32_t>& sectionVertexIndexRemap = vertexIndexRemap[sectionIndex];
         for (int index = 0; index < numIndices; index++) {
-            uint32_t VertexIndex = sectionVertexIndexRemap[sectionIndices[index]];
-            model.indexBuffer.push_back(VertexIndex);
+            uint32_t vertexIndex = sectionVertexIndexRemap[sectionIndices[index]];
+            model.indexBuffer.push_back(vertexIndex);
         }
     }
 
     // Free the skinned mesh chunks which are no longer needed.
-    for (int i = 0; i < chunks.size(); ++i) {
+    for (int i = 0; i < chunks.size(); i++) {
         chunks[i] = nullptr;
     }
     chunks.clear();
@@ -1270,8 +1279,8 @@ bool PrepareSourceMesh(const std::string& skinnedMeshName, IMeshBuildInputData& 
 }
 
 bool MeshBuilder::BuildMesh(MeshAsset<>& model, const std::string& meshName, const std::vector<Importer::MeshImportData::VertexInfluence>& influences, const std::vector<Importer::MeshImportData::MeshWedge>& wedges, const std::vector<Importer::MeshImportData::MeshFace>& faces,
-                            const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, const MeshBuildSettings& buildOptions) {
-    MeshBuildInputData buildData(model, influences, wedges, faces, points, pointToOriginalMap, buildOptions);
+                            const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& buildOptions) {
+    MeshBuildInputData buildData(model, influences, wedges, faces, points, pointToOriginalMap, sceneInfo, buildOptions);
 
     if (!PrepareSourceMesh(meshName, buildData, overlappingCorners)) {
         return false;
@@ -1296,10 +1305,10 @@ bool MeshBuilder::BuildMesh(MeshAsset<>& model, const std::string& meshName, con
         bHasBadSections |= (section.numTriangles == 0);
 
         // Log info about the section.
-        LOG_INFO("分块" + std::to_string(sectionIndex) + "：" + std::to_string(section.materialIndex) + "个材质索引，" + std::to_string(section.numTriangles) + "个三角面。");
+        LOG_INFO(fmt::format("Section {:d} use material index {:d}, has {:d} triangles.", sectionIndex + 1, section.materialIndex, section.numTriangles));
     }
     if (bHasBadSections) {
-        LOG_ERROR("分块不包含任何三角面。");
+        LOG_ERROR("Meah has section without any triangles.");
     }
 
     return true;
@@ -1329,7 +1338,7 @@ std::shared_ptr<Assets::MeshAsset> ConvertToMesh(std::shared_ptr<Mesh<>> mesh) {
             }
             if (mesh->numTexCoords > 0) {
                 for (int i = 0; i < mesh->numTexCoords; i++) {
-                    vertex->uv.emplace_back(static_cast<float>(rawVetex.UVs[i].x), static_cast<float>(rawVetex.UVs[i].y));
+                    vertex->uv.emplace_back(static_cast<float>(rawVetex.uvs[i].x), static_cast<float>(rawVetex.uvs[i].y));
                 }
             }
             if (mesh->bHasTangents) {

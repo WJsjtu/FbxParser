@@ -19,7 +19,7 @@ void SkinnedSubMeshAsset::CalcMaxBoneInfluences() {
 
         // calc # of bones used by this soft skinned vertex
         int bonesUsed = 0;
-        for (int influenceIdx = 0; influenceIdx < MAX_TOTAL_INFLUENCES; influenceIdx++) {
+        for (int influenceIdx = 0; influenceIdx < softVert.influenceBones.size(); influenceIdx++) {
             if (softVert.influenceWeights[influenceIdx] > 0) {
                 bonesUsed++;
             }
@@ -27,15 +27,15 @@ void SkinnedSubMeshAsset::CalcMaxBoneInfluences() {
         // reorder bones so that there aren't any unused influence entries within the [0,BonesUsed] range
         for (int influenceIdx = 0; influenceIdx < bonesUsed; influenceIdx++) {
             if (softVert.influenceWeights[influenceIdx] == 0) {
-                for (int exchangeIdx = influenceIdx + 1; exchangeIdx < MAX_TOTAL_INFLUENCES; exchangeIdx++) {
+                for (int exchangeIdx = influenceIdx + 1; exchangeIdx < softVert.influenceBones.size(); exchangeIdx++) {
                     if (softVert.influenceWeights[exchangeIdx] != 0) {
-                        float TempWeight = softVert.influenceWeights[influenceIdx];
+                        float tempWeight = softVert.influenceWeights[influenceIdx];
                         softVert.influenceWeights[influenceIdx] = softVert.influenceWeights[exchangeIdx];
-                        softVert.influenceWeights[exchangeIdx] = TempWeight;
+                        softVert.influenceWeights[exchangeIdx] = tempWeight;
 
-                        uint16_t TempIndex = softVert.influenceBones[influenceIdx];
+                        uint16_t tempIndex = softVert.influenceBones[influenceIdx];
                         softVert.influenceBones[influenceIdx] = softVert.influenceBones[exchangeIdx];
-                        softVert.influenceBones[exchangeIdx] = TempIndex;
+                        softVert.influenceBones[exchangeIdx] = tempIndex;
                         break;
                     }
                 }
@@ -47,11 +47,54 @@ void SkinnedSubMeshAsset::CalcMaxBoneInfluences() {
     }
 }
 
-SkinnedMeshBuildInputData::SkinnedMeshBuildInputData(SkinnedMeshAsset& inModel, const SkinnedMeshSkeleton& inSkeleton, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences, const std::vector<Importer::MeshImportData::MeshWedge>& inWedges,
-                                                     const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints, const std::vector<int>& inPointToOriginalMap, const MeshBuildSettings& inBuildOptions)
-    : IMeshBuildInputData(inWedges, inFaces, inPoints, inInfluences, inPointToOriginalMap, inBuildOptions), model(inModel), skeleton(inSkeleton) {}
+glm::mat4 SkinnedMesh::GetRefPoseMatrix(int BoneIndex) const {
+    ASSERT(BoneIndex >= 0 && BoneIndex < skeleton.GetBoneNum());
+    Maths::Transform BoneTransform = skeleton.GetBonePose()[BoneIndex];
+    // Make sure quaternion is normalized!
+    BoneTransform.NormalizeRotation();
+    return BoneTransform.ToMatrixWithScale();
+}
 
-bool SkinnedMeshBuilder::Build(std::shared_ptr<SkinnedMesh> skinnedMesh, std::shared_ptr<Importer::MeshImportData> meshImportData, const MeshBuildSettings& options) {
+// Pre-calculate refpose-to-local transforms
+void SkinnedMesh::CalculateInvRefMatrices() {
+    const int numRealBones = skeleton.GetBoneNum();
+
+    if (boneInverseMatrices.size() != numRealBones) {
+        boneInverseMatrices.resize(numRealBones, glm::mat4(0));
+
+        // Reset cached mesh-space ref pose
+        CachedComposedRefPoseMatrices.resize(numRealBones, glm::mat4(0));
+
+        // Precompute the Mesh.RefBasesInverse.
+        for (int b = 0; b < numRealBones; b++) {
+            // Render the default pose.
+            CachedComposedRefPoseMatrices[b] = GetRefPoseMatrix(b);
+
+            // Construct mesh-space skeletal hierarchy.
+            if (b > 0) {
+                int Parent = skeleton.GetParentIndex(b);
+                CachedComposedRefPoseMatrices[b] = CachedComposedRefPoseMatrices[Parent] * CachedComposedRefPoseMatrices[b];
+            }
+
+            glm::vec3 XAxis, YAxis, ZAxis;
+
+            Maths::GetMatrixScaledAxes(CachedComposedRefPoseMatrices[b], XAxis, YAxis, ZAxis);
+            if (Maths::IsNearlyZero(XAxis, SMALL_NUMBER) && Maths::IsNearlyZero(YAxis, SMALL_NUMBER) && Maths::IsNearlyZero(ZAxis, SMALL_NUMBER)) {
+                // this is not allowed, warn them
+                LOG_WARN(fmt::format("Reference Pose for asset {} for joint {} includes NIL matrix. Zero scale isn't allowed on ref pose. ", name, skeleton.GetBoneInfo()[b].name));
+            }
+
+            // Precompute inverse so we can use from-refpose-skin vertices.
+            boneInverseMatrices[b] = glm::inverse(CachedComposedRefPoseMatrices[b]);
+        }
+    }
+}
+
+SkinnedMeshBuildInputData::SkinnedMeshBuildInputData(SkinnedMeshAsset& inModel, const SkinnedMeshSkeleton& inSkeleton, const std::vector<Importer::MeshImportData::VertexInfluence>& inInfluences, const std::vector<Importer::MeshImportData::MeshWedge>& inWedges,
+                                                     const std::vector<Importer::MeshImportData::MeshFace>& inFaces, const std::vector<glm::vec3>& inPoints, const std::vector<int>& inPointToOriginalMap, const std::shared_ptr<Importer::SceneInfo>& inSceneInfo, const MeshBuildSettings& inBuildOptions)
+    : IMeshBuildInputData(inWedges, inFaces, inPoints, inInfluences, inPointToOriginalMap, inSceneInfo, inBuildOptions), model(inModel), skeleton(inSkeleton) {}
+
+bool SkinnedMeshBuilder::Build(std::shared_ptr<SkinnedMesh> skinnedMesh, std::shared_ptr<Importer::MeshImportData> meshImportData, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& options) {
     const SkinnedMeshSkeleton& skeleton = skinnedMesh->skeleton;
 
     std::vector<glm::vec3> points;
@@ -71,8 +114,8 @@ bool SkinnedMeshBuilder::Build(std::shared_ptr<SkinnedMesh> skinnedMesh, std::sh
     for (int w = 0; w < meshImportData->wedges.size(); w++) {
         wedges[w].iVertex = meshImportData->wedges[w].vertexIndex;
         // Copy all texture coordinates
-        for (int i = 0; i < MAX_TEXCOORDS; i++) {
-            wedges[w].UVs[i] = meshImportData->wedges[w].UVs[i];
+        for (int i = 0; i < Configuration::MaxTexCoord; i++) {
+            wedges[w].uvs[i] = meshImportData->wedges[w].uvs[i];
         }
         wedges[w].color = meshImportData->wedges[w].color;
     }
@@ -119,7 +162,7 @@ bool SkinnedMeshBuilder::Build(std::shared_ptr<SkinnedMesh> skinnedMesh, std::sh
 
     std::shared_ptr<SkinnedMeshAsset> model = std::make_shared<SkinnedMeshAsset>();
 
-    BuildSkinnedMesh(*model, skinnedMesh->name, skeleton, influences, wedges, faces, points, pointToRawMap, options);
+    BuildSkinnedMesh(*model, skinnedMesh->name, skeleton, influences, wedges, faces, points, pointToRawMap, sceneInfo, options);
 
     skinnedMesh->asset = model;
 
@@ -139,7 +182,7 @@ void PolygonShellsHelper::FillPolygonPatch(const std::vector<uint32_t>& indices,
     // Store a map containing connected faces for each vertex index
     std::map<int, std::vector<int>> vertexIndexToAdjacentFaces;
     // Store a map to retrieve bones use per face
-    for (int faceIndex = 0; faceIndex < numFace; ++faceIndex) {
+    for (int faceIndex = 0; faceIndex < numFace; faceIndex++) {
         const int indiceOffset = faceIndex * 3;
         std::vector<uint16_t>& faceInfluenceBones = bonesPerFace[faceIndex];
         for (int corner = 0; corner < 3; corner++) {
@@ -151,7 +194,7 @@ void PolygonShellsHelper::FillPolygonPatch(const std::vector<uint32_t>& indices,
                 adjacentFaces.push_back(faceIndex);
             }
             const SubMeshVertexWithWedgeIdx& softSkinVertex = vertices[vertexIndex];
-            for (int boneIndex = 0; boneIndex < MAX_TOTAL_INFLUENCES; ++boneIndex) {
+            for (int boneIndex = 0; boneIndex < softSkinVertex.influenceWeights.size(); boneIndex++) {
                 if (softSkinVertex.influenceWeights[boneIndex] > 0) {
                     if (std::find(faceInfluenceBones.begin(), faceInfluenceBones.end(), softSkinVertex.influenceBones[boneIndex]) == faceInfluenceBones.end()) {
                         faceInfluenceBones.push_back(softSkinVertex.influenceBones[boneIndex]);
@@ -178,7 +221,7 @@ void PolygonShellsHelper::FillPolygonPatch(const std::vector<uint32_t>& indices,
     // us doing a huge reserve per patch Simply copy the result in PatchIndexToIndices when we finish gathering the
     // patch data.
     std::vector<uint32_t> allocatedPatchIndexToIndices;
-    for (int faceIndex = 0; faceIndex < numFace; ++faceIndex) {
+    for (int faceIndex = 0; faceIndex < numFace; faceIndex++) {
         // Skip already added faces
         if (faceAdded[faceIndex]) {
             continue;
@@ -246,11 +289,11 @@ void PolygonShellsHelper::AddAdjacentFace(const std::vector<uint32_t>& indices, 
         const glm::vec3& tangentXRef = softSkinVertRef.tangentX;
         const glm::vec3& tangentYRef = softSkinVertRef.tangentY;
         const glm::vec3& tangentZRef = softSkinVertRef.tangentZ;
-        const glm::dvec2& UVRef = softSkinVertRef.UVs[0];
+        const glm::dvec2& UVRef = softSkinVertRef.uvs[0];
         const glm::vec4& colorRef = softSkinVertRef.color;
         ASSERT(vertexIndexToAdjacentFaces.find(vertexIndex) != vertexIndexToAdjacentFaces.end());
         const std::vector<int>& adjacentFaces = vertexIndexToAdjacentFaces.find(vertexIndex)->second;
-        for (int adjacentFaceArrayIndex = 0; adjacentFaceArrayIndex < adjacentFaces.size(); ++adjacentFaceArrayIndex) {
+        for (int adjacentFaceArrayIndex = 0; adjacentFaceArrayIndex < adjacentFaces.size(); adjacentFaceArrayIndex++) {
             const int adjacentFaceIndex = adjacentFaces[adjacentFaceArrayIndex];
             if (!faceAdded[adjacentFaceIndex] && adjacentFaceIndex != FaceIndex) {
                 // Ensure we have position, NTBs, uv and color match to allow a connection.
@@ -263,7 +306,7 @@ void PolygonShellsHelper::AddAdjacentFace(const std::vector<uint32_t>& indices, 
                     const SubMeshVertexWithWedgeIdx& softSkinVertAdj = vertices[vertexIndexAdj];
 
                     if (PointsEqual(positionRef, softSkinVertAdj.position, SMALL_NUMBER) && PointsEqual(tangentXRef, softSkinVertAdj.tangentX, SMALL_NUMBER) && PointsEqual(tangentYRef, softSkinVertAdj.tangentY, SMALL_NUMBER) && PointsEqual(tangentZRef, softSkinVertAdj.tangentZ, SMALL_NUMBER) &&
-                        UVsEqual(UVRef, softSkinVertAdj.UVs[0], KINDA_SMALL_NUMBER) && colorRef == softSkinVertAdj.color) {
+                        UVsEqual(UVRef, softSkinVertAdj.uvs[0], KINDA_SMALL_NUMBER) && colorRef == softSkinVertAdj.color) {
                         bRealConnection = true;
                         break;
                     }
@@ -293,31 +336,31 @@ void PolygonShellsHelper::AddAdjacentFace(const std::vector<uint32_t>& indices, 
 // Sort the shells to a setup that use the less section possible
 void PolygonShellsHelper::GatherShellUsingSameBones(const int parentPatchIndex, std::vector<PatchAndBoneInfluence>& patchData, std::vector<bool>& patchConsumed, const int maxBonesPerChunk) {
     ASSERT(patchData.size() > parentPatchIndex && parentPatchIndex >= 0);
-    std::vector<uint16_t> UniqueBones = patchData[parentPatchIndex].uniqueBones;
+    std::vector<uint16_t> uniqueBones = patchData[parentPatchIndex].uniqueBones;
     patchData[parentPatchIndex].bIsParent = true;
-    if (UniqueBones.size() > maxBonesPerChunk) {
+    if (uniqueBones.size() > maxBonesPerChunk) {
         return;
     }
-    for (int PatchIndex = parentPatchIndex + 1; PatchIndex < patchData.size(); ++PatchIndex) {
-        if (patchConsumed[PatchIndex]) {
+    for (int patchIndex = parentPatchIndex + 1; patchIndex < patchData.size(); patchIndex++) {
+        if (patchConsumed[patchIndex]) {
             continue;
         }
 
-        std::vector<uint16_t> AddedBones;
-        for (int BoneIndex = 0; BoneIndex < patchData[PatchIndex].uniqueBones.size(); ++BoneIndex) {
-            uint16_t BoneIndexType = patchData[PatchIndex].uniqueBones[BoneIndex];
-            if (std::find(UniqueBones.begin(), UniqueBones.end(), BoneIndexType) == UniqueBones.end()) {
-                AddedBones.push_back(BoneIndexType);
+        std::vector<uint16_t> addedBones;
+        for (int boneIndex = 0; boneIndex < patchData[patchIndex].uniqueBones.size(); boneIndex++) {
+            uint16_t boneIndexType = patchData[patchIndex].uniqueBones[boneIndex];
+            if (std::find(uniqueBones.begin(), uniqueBones.end(), boneIndexType) == uniqueBones.end()) {
+                addedBones.push_back(boneIndexType);
             }
         }
-        if (AddedBones.size() + UniqueBones.size() <= maxBonesPerChunk) {
-            for (const auto& Item : AddedBones) {
-                UniqueBones.push_back(Item);
+        if (addedBones.size() + uniqueBones.size() <= maxBonesPerChunk) {
+            for (const auto& Item : addedBones) {
+                uniqueBones.push_back(Item);
             }
-            patchConsumed[PatchIndex] = true;
+            patchConsumed[patchIndex] = true;
             // We only support one parent layer, the assumption is we have a hierarchy depth of max 2 (parents, childs)
-            ASSERT(!patchData[PatchIndex].bIsParent);
-            patchData[parentPatchIndex].patchToChunkWith.push_back(PatchIndex);
+            ASSERT(!patchData[patchIndex].bIsParent);
+            patchData[parentPatchIndex].patchToChunkWith.push_back(patchIndex);
         }
     }
 }
@@ -328,8 +371,8 @@ void PolygonShellsHelper::RecursiveFillRemapIndices(const std::vector<PatchAndBo
     }
     ASSERT(patchData.size() > patchIndex && patchIndex >= 0);
     // Do the child patch to chunk with
-    for (int SubPatchIndex = 0; SubPatchIndex < patchData[patchIndex].patchToChunkWith.size(); ++SubPatchIndex) {
-        RecursiveFillRemapIndices(patchData, patchData[patchIndex].patchToChunkWith[SubPatchIndex], patchIndexToIndices, srcChunkRemapIndicesIndex);
+    for (int subPatchIndex = 0; subPatchIndex < patchData[patchIndex].patchToChunkWith.size(); subPatchIndex++) {
+        RecursiveFillRemapIndices(patchData, patchData[patchIndex].patchToChunkWith[subPatchIndex], patchIndexToIndices, srcChunkRemapIndicesIndex);
     }
 }
 
@@ -350,7 +393,7 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
 
     //  对每个chunk（per material index）拆分连通域。
     // Find the shells inside chunks
-    for (int chunkIndex = 0; chunkIndex < srcChunks.size(); ++chunkIndex) {
+    for (int chunkIndex = 0; chunkIndex < srcChunks.size(); chunkIndex++) {
         std::shared_ptr<SkinnedSubMesh> chunkToShell = srcChunks[chunkIndex];
         std::vector<uint32_t>& indices = chunkToShell->indices;
         std::vector<SubMeshVertexWithWedgeIdx>& vertices = chunkToShell->vertices;
@@ -363,11 +406,11 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
     }
 
     //  对每个chunk（per material index）对已拆分的连通域进行骨骼贪心合并分析。
-    for (int srcChunkIndex = 0; srcChunkIndex < srcChunks.size(); ++srcChunkIndex) {
+    for (int srcChunkIndex = 0; srcChunkIndex < srcChunks.size(); srcChunkIndex++) {
         std::vector<PolygonShellsHelper::PatchAndBoneInfluence>& patchData = patchDataPerSrcChunk[srcChunkIndex];
         std::vector<bool> patchConsumed(patchData.size(), false);
 
-        for (int patchIndex = 0; patchIndex < patchData.size(); ++patchIndex) {
+        for (int patchIndex = 0; patchIndex < patchData.size(); patchIndex++) {
             if (patchConsumed[patchIndex]) {
                 continue;
             }
@@ -378,7 +421,7 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
 
     // Now split chunks to respect the desired bone limit.
     std::vector<std::vector<int>> indexMaps;
-    for (int srcChunkIndex = 0; srcChunkIndex < srcChunks.size(); ++srcChunkIndex) {
+    for (int srcChunkIndex = 0; srcChunkIndex < srcChunks.size(); srcChunkIndex++) {
         std::shared_ptr<SkinnedSubMesh> srcChunk = srcChunks[srcChunkIndex];
         srcChunk->originalSectionIndex = srcChunkIndex;
         int firstChunkIndex = static_cast<int>(chunks.size());
@@ -388,7 +431,7 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
         const std::vector<std::vector<uint32_t>>& patchIndexToIndices = patchIndexToIndicesPerSrcChunk[srcChunkIndex];
         const std::map<int, std::vector<uint16_t>>& nonesPerFace = patchIndexToBonesPerFace[srcChunkIndex];
 
-        for (int patchIndex = 0; patchIndex < patchData.size(); ++patchIndex) {
+        for (int patchIndex = 0; patchIndex < patchData.size(); patchIndex++) {
             if (!patchData[patchIndex].bIsParent) {
                 continue;
             }
@@ -431,10 +474,10 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
                 std::shared_ptr<SkinnedSubMesh> destChunk = nullptr;
                 int destChunkIndex = /* bUseExperimentalChunking ? PatchInitialChunkIndex : */ lastCreatedChunkIndex;
                 int smallestNumBoneToAdd = std::numeric_limits<int>::max();
-                for (int chunkIndex = destChunkIndex; chunkIndex < chunks.size(); ++chunkIndex) {
+                for (int chunkIndex = destChunkIndex; chunkIndex < chunks.size(); chunkIndex++) {
                     const std::vector<uint16_t>& boneMap = chunks[chunkIndex]->boneMap;
                     int numUniqueBones = 0;
-                    for (int j = 0; j < uniqueBones.size(); ++j) {
+                    for (int j = 0; j < uniqueBones.size(); j++) {
                         numUniqueBones += ((std::find(boneMap.begin(), boneMap.end(), uniqueBones[j]) != boneMap.end()) ? 0 : 1);
                         if (numUniqueBones == smallestNumBoneToAdd) {
                             // Another previous chunk use less or equal unique bone, avoid searching more
@@ -463,7 +506,7 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
                 std::vector<int>& indexMap = indexMaps[destChunkIndex];
 
                 // Add the unique bones to this chunk's bone map.
-                for (int j = 0; j < uniqueBones.size(); ++j) {
+                for (int j = 0; j < uniqueBones.size(); j++) {
                     if (std::find(destChunk->boneMap.begin(), destChunk->boneMap.end(), uniqueBones[j]) == destChunk->boneMap.end()) {
                         destChunk->boneMap.push_back(uniqueBones[j]);
                     }
@@ -477,7 +520,7 @@ void ChunkSkinnedVertices(std::vector<std::shared_ptr<SkinnedSubMesh>>& chunks, 
                         destIndex = static_cast<int>(destChunk->vertices.size());
                         destChunk->vertices.push_back(srcChunk->vertices[vertexIndex]);
                         SubMeshVertexWithWedgeIdx& v = destChunk->vertices[destIndex];
-                        for (int influenceIndex = 0; influenceIndex < MAX_TOTAL_INFLUENCES; influenceIndex++) {
+                        for (int influenceIndex = 0; influenceIndex < v.influenceWeights.size(); influenceIndex++) {
                             if (v.influenceWeights[influenceIndex] > 0) {
                                 auto iter = std::find(destChunk->boneMap.begin(), destChunk->boneMap.end(), v.influenceBones[influenceIndex]);
                                 int mappedIndex = iter == destChunk->boneMap.end() ? -1 : static_cast<int>(iter - destChunk->boneMap.begin());
@@ -522,7 +565,7 @@ bool SkinnedMeshBuilder::GenerateRenderableSkinnedMesh(SkinnedMeshBuildInputData
         } else {
             // we have missing influence vert, we weight to root
             wedgeInfluenceIndices.push_back(-1);
-            LOG_WARN("顶点" + std::to_string(buildData.wedges[wedgeIndex].iVertex) + "缺少蒙皮权重信息，锁定到根骨骼。");
+            LOG_WARN(fmt::format("Missing bone weight info on vertex {:d}, will donate all weight to root.", buildData.wedges[wedgeIndex].iVertex));
         }
     }
 
@@ -535,7 +578,7 @@ bool SkinnedMeshBuilder::GenerateRenderableSkinnedMesh(SkinnedMeshBuildInputData
         // Only update the status progress bar if we are in the game thread and every thousand faces.
         // Updating status is extremely slow
         if (faceIndex % 5000 == 0) {
-            LOG_INFO("正在处理" + std::to_string(faceIndex) + "/" + std::to_string(buildData.faces.size()) + "个三角面。");
+            LOG_INFO(fmt::format("Processing triangles: {:d}/{:d} .", faceIndex + 1, buildData.faces.size()));
         }
 
         const Importer::MeshImportData::MeshFace& Face = buildData.faces[faceIndex];
@@ -561,8 +604,8 @@ bool SkinnedMeshBuilder::GenerateRenderableSkinnedMesh(SkinnedMeshBuildInputData
             vertex.tangentY = tangentY;
             vertex.tangentZ = tangentZ;
 
-            for (int ii = 0; ii < MAX_TEXCOORDS; ii++) {
-                vertex.UVs[ii] = wedge.UVs[ii];
+            for (int ii = 0; ii < Configuration::MaxTexCoord; ii++) {
+                vertex.uvs[ii] = wedge.uvs[ii];
             }
             vertex.color = wedge.color;
 
@@ -570,10 +613,6 @@ bool SkinnedMeshBuilder::GenerateRenderableSkinnedMesh(SkinnedMeshBuildInputData
                 // Count the influences.
                 int infIdx = wedgeInfluenceIndices[Face.iWedge[vertexIndex]];
                 if (infIdx == -1) {
-                    for (uint32_t i = 0; i < MAX_TOTAL_INFLUENCES; i++) {
-                        vertex.influenceBones[i] = 0;
-                        vertex.influenceWeights[i] = 0;
-                    }
                 } else {
                     int lookIdx = infIdx;
 
@@ -582,36 +621,24 @@ bool SkinnedMeshBuilder::GenerateRenderableSkinnedMesh(SkinnedMeshBuildInputData
                         influenceCount++;
                         lookIdx++;
                     }
-
-                    // Setup the vertex influences.
-                    vertex.influenceBones[0] = 0;
-                    vertex.influenceWeights[0] = 1.0f;
-                    for (uint32_t i = 1; i < MAX_TOTAL_INFLUENCES; i++) {
-                        vertex.influenceBones[i] = 0;
-                        vertex.influenceWeights[i] = 0.0f;
+                    vertex.influenceBones.resize(influenceCount);
+                    vertex.influenceWeights.resize(influenceCount);
+                    if (influenceCount > 0) {
+                        // Setup the vertex influences.
+                        vertex.influenceBones[0] = 0;
+                        vertex.influenceWeights[0] = 1.0f;
+                        for (uint32_t i = 1; i < influenceCount; i++) {
+                            vertex.influenceBones[i] = 0;
+                            vertex.influenceWeights[i] = 0.0f;
+                        }
                     }
 
                     for (uint32_t i = 0; i < influenceCount; i++) {
-                        uint16_t BoneIndex = buildData.influences[infIdx + i].boneIndex;
-                        if (BoneIndex >= buildData.skeleton.GetBoneNum()) continue;
-                        vertex.influenceBones[i] = BoneIndex;
+                        uint16_t boneIndex = buildData.influences[infIdx + i].boneIndex;
+                        if (boneIndex >= buildData.skeleton.GetBoneNum()) continue;
+                        vertex.influenceBones[i] = boneIndex;
                         vertex.influenceWeights[i] = buildData.influences[infIdx + i].weight;
                     }
-
-                    influenceCount = Maths::Min<uint32_t>(influenceCount, MAX_TOTAL_INFLUENCES);
-                    if (influenceCount > EXTRA_BONE_INFLUENCES) {
-                        int max = EXTRA_BONE_INFLUENCES;
-                        LOG_WARN("蒙皮顶点" + std::to_string(wedge.iVertex) + "包含" + std::to_string(influenceCount) + "个骨骼权重信息，截断到支持上限" + std::to_string(max) + "。");
-                        influenceCount = EXTRA_BONE_INFLUENCES;
-                    }
-
-                    float totalInfluenceWeight = 0;
-                    for (uint32_t i = 0; i < influenceCount; i++) {
-                        uint16_t BoneIndex = buildData.influences[infIdx + i].boneIndex;
-                        totalInfluenceWeight += vertex.influenceWeights[i];
-                    }
-
-                    vertex.influenceWeights[0] += 1.0f - totalInfluenceWeight;
                 }
             }
 
@@ -658,7 +685,7 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
     model.indexBuffer.clear();
 
     // Setup the section and chunk arrays on the model.
-    for (int chunkIndex = 0; chunkIndex < chunks.size(); ++chunkIndex) {
+    for (int chunkIndex = 0; chunkIndex < chunks.size(); chunkIndex++) {
         std::shared_ptr<SkinnedSubMesh> srcChunk = chunks[chunkIndex];
         model.sections.push_back(SkinnedSubMeshAsset());
         SkinnedSubMeshAsset& section = model.sections.back();
@@ -670,7 +697,7 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
         section.chunkedParentSectionIndex = srcChunk->parentChunkSectionIndex;
 
         // Update the active bone indices on the LOD model.
-        for (int boneIndex = 0; boneIndex < section.boneMap.size(); ++boneIndex) {
+        for (int boneIndex = 0; boneIndex < section.boneMap.size(); boneIndex++) {
             if (std::find(model.activeBoneIndices.begin(), model.activeBoneIndices.end(), section.boneMap[boneIndex]) == model.activeBoneIndices.end()) {
                 model.activeBoneIndices.push_back(section.boneMap[boneIndex]);
             }
@@ -697,7 +724,7 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
 
     // rearrange the vert order to minimize the data fetched by the GPU
     for (int sectionIndex = 0; sectionIndex < model.sections.size(); sectionIndex++) {
-        LOG_INFO("正在处理网格分块" + std::to_string(sectionIndex) + "/" + std::to_string(model.sections.size()) + "。");
+        LOG_INFO(fmt::format("Processing mesh sections: {:d}/{:d} .", sectionIndex + 1, model.sections.size()));
 
         std::shared_ptr<SkinnedSubMesh> srcChunk = chunks[sectionIndex];
         SkinnedSubMeshAsset& section = model.sections[sectionIndex];
@@ -723,7 +750,7 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
             const int cachedIndex = indexCache[originalIndex];
 
             if (cachedIndex == -1) {
-                // No new index has been allocated for this existing index, assign a new one
+                // No new index has been allocated for this existing index, assign one
                 chunkIndices[index] = nextAvailableIndex;
                 // Mark what this index has been assigned to
                 indexCache[originalIndex] = nextAvailableIndex;
@@ -741,7 +768,7 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
     for (int sectionIndex = 0; sectionIndex < model.sections.size(); sectionIndex++) {
         SkinnedSubMeshAsset& section = model.sections[sectionIndex];
         std::vector<SubMeshVertexWithWedgeIdx>& chunkVertices = chunks[sectionIndex]->vertices;
-        LOG_INFO("正在处理分块。");
+        LOG_INFO(fmt::format("Building mesh sections: {:d}/{:d} .", sectionIndex + 1, model.sections.size()));
 
         currentVertexIndex = 0;
         currentChunkVertexCount = 0;
@@ -766,11 +793,13 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
             newVertex.tangentX = softVertex.tangentX;
             newVertex.tangentY = softVertex.tangentY;
             newVertex.tangentZ = glm::vec4(softVertex.tangentZ.x, softVertex.tangentZ.y, softVertex.tangentZ.z, 1);
-            for (int ii = 0; ii < MAX_TEXCOORDS; ii++) {
-                newVertex.UVs[ii] = softVertex.UVs[ii];
+            for (int ii = 0; ii < Configuration::MaxTexCoord; ii++) {
+                newVertex.uvs[ii] = softVertex.uvs[ii];
             }
             newVertex.color = softVertex.color;
-            for (int i = 0; i < MAX_TOTAL_INFLUENCES; ++i) {
+            newVertex.influenceBones.resize(softVertex.influenceBones.size());
+            newVertex.influenceWeights.resize(softVertex.influenceBones.size());
+            for (int i = 0; i < softVertex.influenceBones.size(); i++) {
                 // it only adds to the bone map if it has weight on it
                 // BoneMap contains only the bones that has influence with weight of >0.f
                 // so here, just make sure it is included before setting the data
@@ -797,7 +826,7 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
         section.CalcMaxBoneInfluences();
 
         // Log info about the chunk.
-        LOG_INFO("分块" + std::to_string(sectionIndex) + "：" + std::to_string(section.numVertices) + "个顶点，" + std::to_string(section.boneMap.size()) + "根骨骼。");
+        LOG_INFO(fmt::format("Section {:d} has {:d} vertecies and {:d} bones.", sectionIndex + 1, section.numVertices, section.boneMap.size()));
     }
 
     // Copy raw point indices to LOD model.
@@ -816,13 +845,13 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
         const int numIndices = static_cast<int>(sectionIndices.size());
         const std::vector<uint32_t>& sectionVertexIndexRemap = vertexIndexRemap[sectionIndex];
         for (int index = 0; index < numIndices; index++) {
-            uint32_t VertexIndex = sectionVertexIndexRemap[sectionIndices[index]];
-            model.indexBuffer.push_back(VertexIndex);
+            uint32_t vertexIndex = sectionVertexIndexRemap[sectionIndices[index]];
+            model.indexBuffer.push_back(vertexIndex);
         }
     }
 
     // Free the skinned mesh chunks which are no longer needed.
-    for (int i = 0; i < chunks.size(); ++i) {
+    for (int i = 0; i < chunks.size(); i++) {
         chunks[i] = nullptr;
     }
     chunks.clear();
@@ -839,8 +868,8 @@ void BuildSkinnedMeshModelFromChunks(SkinnedMeshAsset& model, const SkinnedMeshS
 }
 
 bool SkinnedMeshBuilder::BuildSkinnedMesh(SkinnedMeshAsset& model, const std::string& skinnedMeshName, const SkinnedMeshSkeleton& skeleton, const std::vector<Importer::MeshImportData::VertexInfluence>& influences, const std::vector<Importer::MeshImportData::MeshWedge>& wedges,
-                                          const std::vector<Importer::MeshImportData::MeshFace>& faces, const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, const MeshBuildSettings& buildOptions) {
-    SkinnedMeshBuildInputData buildData(model, skeleton, influences, wedges, faces, points, pointToOriginalMap, buildOptions);
+                                          const std::vector<Importer::MeshImportData::MeshFace>& faces, const std::vector<glm::vec3>& points, const std::vector<int>& pointToOriginalMap, std::shared_ptr<Importer::SceneInfo> sceneInfo, const MeshBuildSettings& buildOptions) {
+    SkinnedMeshBuildInputData buildData(model, skeleton, influences, wedges, faces, points, pointToOriginalMap, sceneInfo, buildOptions);
 
     if (!PrepareSourceMesh(skinnedMeshName, buildData, overlappingCorners)) {
         return false;
@@ -863,12 +892,11 @@ bool SkinnedMeshBuilder::BuildSkinnedMesh(SkinnedMeshAsset& model, const std::st
     for (int sectionIndex = 0; sectionIndex < buildData.model.sections.size(); sectionIndex++) {
         SkinnedSubMeshAsset& section = buildData.model.sections[sectionIndex];
         bHasBadSections |= (section.numTriangles == 0);
-
         // Log info about the section.
-        LOG_INFO("分块" + std::to_string(sectionIndex) + "：" + std::to_string(section.materialIndex) + "个材质索引，" + std::to_string(section.numTriangles) + "个三角面。");
+        LOG_INFO(fmt::format("Section {:d} use material index {:d}, has {:d} triangles.", sectionIndex + 1, section.materialIndex, section.numTriangles));
     }
     if (bHasBadSections) {
-        LOG_ERROR("分块不包含任何三角面。");
+        LOG_ERROR("Skinned meah has section without any triangles.");
     }
 
     return true;
@@ -898,7 +926,7 @@ std::shared_ptr<Assets::MeshAsset> ConvertToMesh(std::shared_ptr<SkinnedMesh> me
             }
             if (mesh->numTexCoords > 0) {
                 for (int i = 0; i < mesh->numTexCoords; i++) {
-                    vertex->uv.emplace_back(static_cast<float>(rawVetex.UVs[i].x), static_cast<float>(rawVetex.UVs[i].y));
+                    vertex->uv.emplace_back(static_cast<float>(rawVetex.uvs[i].x), static_cast<float>(rawVetex.uvs[i].y));
                 }
             }
             if (mesh->bHasTangents) {
@@ -907,7 +935,7 @@ std::shared_ptr<Assets::MeshAsset> ConvertToMesh(std::shared_ptr<SkinnedMesh> me
                 vertex->tangent.z = rawVetex.tangentX.z;
                 vertex->tangent.w = 1.0;
             }
-            for (int i = 0; i < EXTRA_BONE_INFLUENCES; i++) {
+            for (int i = 0; i < rawVetex.influenceBones.size(); i++) {
                 vertex->boneWeight.push_back(rawVetex.influenceWeights[i]);
                 vertex->boneIndex.push_back(rawSubMesh.boneMap[rawVetex.influenceBones[i]]);
             }
@@ -1047,7 +1075,7 @@ void SkinnedMeshHelper::ProcessImportMeshMaterials(std::vector<std::shared_ptr<A
     // material name, cut off anything in front of the dot (beyond are special flags).
     materials.clear();
     int skinOffset = -1;
-    for (int matIndex = 0; matIndex < importedMaterials.size(); ++matIndex) {
+    for (int matIndex = 0; matIndex < importedMaterials.size(); matIndex++) {
         const Importer::MeshImportData::RawMaterial& importedMaterial = importedMaterials[matIndex];
 
         std::shared_ptr<Assets::MaterialAsset> material = nullptr;
@@ -1113,7 +1141,6 @@ void SkinnedMeshHelper::ProcessImportMeshInfluences(std::shared_ptr<Importer::Me
     const float MINWEIGHT = 0.01f;
 
     int maxVertexInfluence = 0;
-    float maxIgnoredWeight = 0.0f;
 
     // We have to normalize the data before filtering influences
     // Because influence filtering is base on the normalize value.
@@ -1140,17 +1167,6 @@ void SkinnedMeshHelper::ProcessImportMeshInfluences(std::shared_ptr<Importer::Me
             influenceCount = 0;
             totalWeight = 0.f;
         }
-
-        if (influenceCount > MAX_TOTAL_INFLUENCES && influences[i].weight > maxIgnoredWeight) {
-            maxIgnoredWeight = influences[i].weight;
-        }
-    }
-
-    // warn about too many influences
-    if (maxVertexInfluence > MAX_TOTAL_INFLUENCES) {
-        // UE_LOG(LogLODUtilities, Display, TEXT("Skeletal mesh (%s) influence count of %d exceeds max count of %d.
-        // Influence truncation will occur. Maximum Ignored Weight %f"), *MeshName, MaxVertexInfluence,
-        // MAX_TOTAL_INFLUENCES, MaxIgnoredWeight);
     }
 
     for (int i = 0; i < influences.size(); i++) {
@@ -1166,8 +1182,8 @@ void SkinnedMeshHelper::ProcessImportMeshInfluences(std::shared_ptr<Importer::Me
 
             // now we insert missing verts
             if (lastVertexIndex != -1) {
-                int CurrentVertexIndex = influences[i].vertexIndex;
-                for (int j = lastVertexIndex + 1; j < CurrentVertexIndex; j++) {
+                int currentVertexIndex = influences[i].vertexIndex;
+                for (int j = lastVertexIndex + 1; j < currentVertexIndex; j++) {
                     // Add a 0-bone weight if none other present (known to happen with certain MAX skeletal setups).
                     newInfluences.push_back(Importer::MeshImportData::RawBoneInfluence());
                     lastNewInfluenceIndex = static_cast<int>(newInfluences.size() - 1);
@@ -1183,13 +1199,10 @@ void SkinnedMeshHelper::ProcessImportMeshInfluences(std::shared_ptr<Importer::Me
             lastVertexIndex = influences[i].vertexIndex;
         }
 
-        // if less than min weight, or it's more than 8, then we clear it to use weight
-        if (influences[i].weight > MINWEIGHT && influenceCount < MAX_TOTAL_INFLUENCES) {
-            newInfluences.push_back(influences[i]);
-            lastNewInfluenceIndex = static_cast<int>(newInfluences.size() - 1);
-            influenceCount++;
-            totalWeight += influences[i].weight;
-        }
+        newInfluences.push_back(influences[i]);
+        lastNewInfluenceIndex = static_cast<int>(newInfluences.size() - 1);
+        influenceCount++;
+        totalWeight += influences[i].weight;
     }
 
     influences = newInfluences;

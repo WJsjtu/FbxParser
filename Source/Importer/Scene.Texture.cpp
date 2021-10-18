@@ -1,7 +1,8 @@
 #include "Scene.h"
 #include "Decoder.h"
-#define NOMINMAX
-#include "ghc/filesystem.hpp"
+#include "FbxParser.private.h"
+#include <filesystem>
+#include <fstream>
 
 namespace Fbx { namespace Importer {
 std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTexture, bool bSetupAsNormalMap) {
@@ -12,7 +13,7 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
     // create an texture asset
     std::shared_ptr<Assets::TextureAsset> exportTexture = nullptr;
     std::string absoluteFilename = ImporterHelper::UTF8ToNative(fbxTexture->GetFileName());
-    std::string extension = ghc::filesystem::path(absoluteFilename).extension().generic_string();
+    std::string extension = std::filesystem::path(absoluteFilename).extension().generic_string();
     Utils::ToLowerCase(extension);
 
     // name the texture with file name
@@ -21,13 +22,13 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
     if (foundTexture != FbxTextureToUniqueNameMap.end()) {
         textureName = foundTexture->second;
     } else {
-        textureName = ghc::filesystem::path(absoluteFilename).stem().generic_string();
+        textureName = std::filesystem::path(absoluteFilename).stem().generic_string();
         textureName = Utils::SanitizeObjectName(textureName);
         FbxTextureToUniqueNameMap[fbxTexture] = textureName;
     }
 
     std::string finalFilePath;
-    if (ghc::filesystem::exists(absoluteFilename)) {
+    if (Utils::ExistPath(absoluteFilename)) {
         // try opening from absolute path
         finalFilePath = absoluteFilename;
         std::vector<char> dataBinary;
@@ -58,7 +59,7 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
             if (textureAssets.find(fbxTexture) == textureAssets.end()) {
                 try {
                     exportTexture = std::make_shared<Assets::TextureAsset>();
-					exportTexture->fileType = fileType;
+                    exportTexture->fileType = fileType;
                     exportTexture->uniqueID = std::to_string(fbxTexture->GetUniqueID());
                     exportTexture->name = textureName;
                     exportTexture->raw = dataBinary;
@@ -104,7 +105,7 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
                         if ((image.source.type == ImageDecoder::EImageFormat::PNG || image.source.type == ImageDecoder::EImageFormat::JPEG) && image.source.RGBFormat == ImageDecoder::ERGBFormat::RGBA && image.source.bitDepth == 8) {
                             exportTexture->bIsCommonPNGorJPGFile = true;
                             exportTexture->bEnableCompress = true;
-							exportTexture->pixelFormat = Assets::TextureAsset::EPixelFormat::RGBA8;
+                            exportTexture->pixelFormat = Assets::TextureAsset::EPixelFormat::RGBA8;
                         } else {
                             if (image.textureformat == ImageDecoder::ETextureSourceFormat::RGBA8 || image.textureformat == ImageDecoder::ETextureSourceFormat::RGBA16F) {
                                 if (image.textureformat == ImageDecoder::ETextureSourceFormat::RGBA8) {
@@ -146,7 +147,7 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
             }
         }
     } else {
-        LOG_ERROR("无法打开图片文件" + absoluteFilename + "。");
+        LOG_ERROR(fmt::format("Failed to open image file at {}.", absoluteFilename));
     }
 
     return exportTexture;

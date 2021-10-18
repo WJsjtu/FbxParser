@@ -1,5 +1,4 @@
-﻿#define NOMINMAX
-#include <ghc/filesystem.hpp>
+﻿#include <filesystem>
 #include "Animation.h"
 #include "Builder/SkinnedMeshBuilder.h"
 #include "Scene.h"
@@ -36,7 +35,7 @@ bool Scene::IsValidAnimationData(std::vector<FbxNode*>& sortedLinks, FbxNode* no
         // The animation timespan must use the original fbx framerate so the frame number match the DCC frame number
         FbxTimeSpan animTimeSpan = GetAnimationTimeSpan(sortedLinks[0], curAnimStack);
         if (animTimeSpan.GetDuration() <= 0) {
-            LOG_ERROR("动画：" + ImporterHelper::UTF8ToNative(curAnimStack->GetName()) + "不包含任何关键帧。");
+            LOG_ERROR(fmt::format("Animation {} doesn't have any keyframes.", ImporterHelper::UTF8ToNative(curAnimStack->GetName())));
             continue;
         }
 
@@ -48,11 +47,11 @@ bool Scene::IsValidAnimationData(std::vector<FbxNode*>& sortedLinks, FbxNode* no
             FbxGeometry* geometry = (FbxGeometry*)node->GetNodeAttribute();
             if (geometry) {
                 int blendShapeDeformerCount = geometry->GetDeformerCount(FbxDeformer::eBlendShape);
-                for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; ++blendShapeIndex) {
+                for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; blendShapeIndex++) {
                     FbxBlendShape* blendShape = (FbxBlendShape*)geometry->GetDeformer(blendShapeIndex, FbxDeformer::eBlendShape);
 
                     int blendShapeChannelCount = blendShape->GetBlendShapeChannelCount();
-                    for (int channelIndex = 0; channelIndex < blendShapeChannelCount; ++channelIndex) {
+                    for (int channelIndex = 0; channelIndex < blendShapeChannelCount; channelIndex++) {
                         FbxBlendShapeChannel* channel = blendShape->GetBlendShapeChannel(channelIndex);
 
                         if (channel) {
@@ -86,9 +85,9 @@ int Scene::GetMaxSampleRate(std::vector<FbxNode*>& sortedLinks, FbxNode* rootNod
         double animStackStop = animStackTimeSpan.GetStop().GetSecondDouble();
 
         int animStackLayerCount = curAnimStack->GetMemberCount();
-        for (int layerIndex = 0; layerIndex < animStackLayerCount; ++layerIndex) {
+        for (int layerIndex = 0; layerIndex < animStackLayerCount; layerIndex++) {
             FbxAnimLayer* animLayer = (FbxAnimLayer*)curAnimStack->GetMember(layerIndex);
-            for (int linkIndex = 0; linkIndex < sortedLinks.size(); ++linkIndex) {
+            for (int linkIndex = 0; linkIndex < sortedLinks.size(); linkIndex++) {
                 FbxNode* currentLink = sortedLinks[linkIndex];
                 ImporterHelper::GetNodeSampleRate(currentLink, animLayer, curveAnimSampleRates, true, false);
             }
@@ -132,7 +131,7 @@ bool Scene::ValidateAnimStack(std::vector<FbxNode*>& sortedLinks, FbxNode* rootN
     // set current anim stack
     sceneInfo->scene->SetCurrentAnimationStack(curAnimStack);
 
-    LOG_INFO("正在解析动画" + ImporterHelper::UTF8ToNative(curAnimStack->GetName()));
+    LOG_INFO(fmt::format("Processing animation {}.", ImporterHelper::UTF8ToNative(curAnimStack->GetName())));
 
     bool bValidAnimStack = true;
 
@@ -150,11 +149,11 @@ bool Scene::ValidateAnimStack(std::vector<FbxNode*>& sortedLinks, FbxNode* rootN
         FbxGeometry* geometry = (FbxGeometry*)rootNode->GetNodeAttribute();
         if (geometry) {
             int blendShapeDeformerCount = geometry->GetDeformerCount(FbxDeformer::eBlendShape);
-            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; ++blendShapeIndex) {
+            for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; blendShapeIndex++) {
                 FbxBlendShape* blendShape = (FbxBlendShape*)geometry->GetDeformer(blendShapeIndex, FbxDeformer::eBlendShape);
 
                 int blendShapeChannelCount = blendShape->GetBlendShapeChannelCount();
-                for (int channelIndex = 0; channelIndex < blendShapeChannelCount; ++channelIndex) {
+                for (int channelIndex = 0; channelIndex < blendShapeChannelCount; channelIndex++) {
                     FbxBlendShapeChannel* channel = blendShape->GetBlendShapeChannel(channelIndex);
 
                     if (channel) {
@@ -188,20 +187,20 @@ void Scene::ImportBlendShapeCurves(std::shared_ptr<AnimationImportData> animImpo
     if (geometry) {
         int blendShapeDeformerCount = geometry->GetDeformerCount(FbxDeformer::eBlendShape);
 
-        for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; ++blendShapeIndex) {
+        for (int blendShapeIndex = 0; blendShapeIndex < blendShapeDeformerCount; blendShapeIndex++) {
             FbxBlendShape* blendShape = (FbxBlendShape*)geometry->GetDeformer(blendShapeIndex, FbxDeformer::eBlendShape);
 
             const int blendShapeChannelCount = blendShape->GetBlendShapeChannelCount();
 
-            std::string blendShapeName = ImporterHelper::MakeName(ImporterHelper::NativeToUTF8(blendShape->GetName()));
+            std::string blendShapeName = ImporterHelper::MakeName(ImporterHelper::UTF8ToNative(blendShape->GetName()));
 
             // see below where this is used for explanation...
             const bool bMightBeBadMAXFile = blendShapeName == "Morpher";
-            for (int channelIndex = 0; channelIndex < blendShapeChannelCount; ++channelIndex) {
+            for (int channelIndex = 0; channelIndex < blendShapeChannelCount; channelIndex++) {
                 FbxBlendShapeChannel* channel = blendShape->GetBlendShapeChannel(channelIndex);
 
                 if (channel) {
-                    std::string channelName = ImporterHelper::MakeName(ImporterHelper::NativeToUTF8(channel->GetName()));
+                    std::string channelName = ImporterHelper::MakeName(ImporterHelper::UTF8ToNative(channel->GetName()));
                     // Maya adds the name of the blendshape and an underscore or point to the front of the channel name, so remove it
                     // Also avoid to endup with a empty name, we prefer having the Blendshapename instead of nothing
                     if (channelName.find(blendShapeName) == 0 && channelName.size() > blendShapeName.size()) {
@@ -211,7 +210,7 @@ void Scene::ImportBlendShapeCurves(std::shared_ptr<AnimationImportData> animImpo
                     if (bMightBeBadMAXFile) {
                         FbxShape* targetShape = channel->GetTargetShapeCount() > 0 ? channel->GetTargetShape(0) : nullptr;
                         if (targetShape) {
-                            std::string targetShapeName = ImporterHelper::MakeName(ImporterHelper::NativeToUTF8(targetShape->GetName()));
+                            std::string targetShapeName = ImporterHelper::MakeName(ImporterHelper::UTF8ToNative(targetShape->GetName()));
                             channelName = targetShapeName.empty() ? channelName : targetShapeName;
                         }
                     }
@@ -227,7 +226,7 @@ void Scene::ImportBlendShapeCurves(std::shared_ptr<AnimationImportData> animImpo
                         //}
 
                     } else {
-                        LOG_WARN("动画" + channelName + "包含非法的值，导出将被逃过。");
+                        LOG_WARN(fmt::format("Animation {} contains invalid value for channel {}.", ImporterHelper::UTF8ToNative(curAnimStack->GetName()), channelName));
                     }
                 }
             }
@@ -236,7 +235,7 @@ void Scene::ImportBlendShapeCurves(std::shared_ptr<AnimationImportData> animImpo
 }
 
 void Scene::ImportBoneTracks(Builder::SkinnedMeshSkeleton skeleton, std::shared_ptr<AnimationImportData> importData, FbxNode* rootNode, FbxAnimStack* animStack, const int resampleRate, int& outTotalNumKeys) {
-    LOG_INFO("正在导出动画数据。");
+    LOG_INFO("Parsing bone tracks ...");
     outTotalNumKeys = 0;
     auto options = Importer::GetInstance()->options;
     const bool bPreserveLocalTransform = options->bPreserveLocalTransform;
@@ -245,7 +244,7 @@ void Scene::ImportBoneTracks(Builder::SkinnedMeshSkeleton skeleton, std::shared_
 
     bool bIsRigidMeshAnimation = false;
     if (importData->sortedLinks.size() > 0) {
-        for (int boneIdx = 0; boneIdx < importData->sortedLinks.size(); ++boneIdx) {
+        for (int boneIdx = 0; boneIdx < importData->sortedLinks.size(); boneIdx++) {
             FbxNode* link = importData->sortedLinks[boneIdx];
             if (link->GetMesh() && link->GetMesh()->GetDeformerCount(FbxDeformer::eSkin) == 0) {
                 bIsRigidMeshAnimation = true;
@@ -264,14 +263,14 @@ void Scene::ImportBoneTracks(Builder::SkinnedMeshSkeleton skeleton, std::shared_
 
     const FbxTime timeDeltaForDerivative = (0.01 * static_cast<float>(FBXSDK_TC_MILLISECOND));
 
-    for (int sourceTrackIdx = 0; sourceTrackIdx < importData->fbxRawBoneNames.size(); ++sourceTrackIdx) {
+    for (int sourceTrackIdx = 0; sourceTrackIdx < importData->fbxRawBoneNames.size(); sourceTrackIdx++) {
         int numKeysForTrack = 0;
 
         // see if it's found in Skeleton
         std::string boneName = importData->fbxRawBoneNames[sourceTrackIdx];
         int boneTreeIndex = skeleton.FindRawBoneIndex(boneName);
 
-        LOG_INFO("正在处理动画Track:" + boneName + " (" + std::to_string(sourceTrackIdx + 1) + "/" + std::to_string(importData->fbxRawBoneNames.size()) + ")，共" + std::to_string(numSamplingFrame + 1) + "帧。");
+        LOG_INFO(fmt::format("Processing track {}, progress {}/{}, current track contains {} keyframes.", boneName, sourceTrackIdx + 1, importData->fbxRawBoneNames.size(), numSamplingFrame + 1));
 
         if (boneTreeIndex != -1) {
             bool bSuccess = true;
@@ -301,14 +300,14 @@ void Scene::ImportBoneTracks(Builder::SkinnedMeshSkeleton skeleton, std::shared_
                     glm::mat4 globalMatrix = FbxDataConverter::ConvertMatrix(globalFbxMatrix);
                     /*if (glm::isnan(globalMatrix)) {
                         bSuccess = false;
-                        ApplicationLogger.Info("正在处理动画Track:" + BoneName + "含有非法数据。");
+                        LOG_INFO(fmt::format("Track {} contains invalid value.", boneName));
                         break;
                     }*/
 
                     Maths::Transform globalTransform = FbxDataConverter::ConvertTransform(globalFbxMatrix);
                     if (glm::all(glm::isnan(globalTransform.translation)) || glm::all(glm::isnan(globalTransform.scale)) || glm::all(glm::isnan(globalTransform.rotation))) {
                         bSuccess = false;
-                        LOG_INFO("动画Track:" + boneName + "含有非法数据。");
+                        LOG_INFO(fmt::format("Track {} contains invalid value.", boneName));
                         return false;
                     }
 
@@ -344,7 +343,7 @@ void Scene::ImportBoneTracks(Builder::SkinnedMeshSkeleton skeleton, std::shared_
 
                     if (glm::all(glm::isnan(localTransform.translation)) || glm::all(glm::isnan(localTransform.scale)) || glm::all(glm::isnan(localTransform.rotation))) {
                         bSuccess = false;
-                        LOG_ERROR("动画Track:" + boneName + "含有非法数据。");
+                        LOG_INFO(fmt::format("Track {} contains invalid value.", boneName));
                         return false;
                     }
 
@@ -584,7 +583,7 @@ std::vector<std::shared_ptr<AnimationImportData>> Scene::ImportAnimations(FbxNod
 bool ImporterHelper::ShouldImportCurve(FbxAnimCurve* curve, bool bDoNotImportWithZeroValues) {
     if (curve && curve->KeyGetCount() > 0) {
         if (bDoNotImportWithZeroValues) {
-            for (int keyIndex = 0; keyIndex < curve->KeyGetCount(); ++keyIndex) {
+            for (int keyIndex = 0; keyIndex < curve->KeyGetCount(); keyIndex++) {
                 if (!Maths::IsNearlyZero(curve->KeyGetValue(keyIndex))) {
                     return true;
                 }

@@ -14,7 +14,7 @@ bool Scene::CreateAndLinkExpressionForMaterialProperty(FbxSurfaceMaterial* fbxMa
         } else {
             int textureCount = fbxProperty.GetSrcObjectCount<FbxTexture>();
             if (textureCount > 0) {
-                for (int textureIndex = 0; textureIndex < textureCount; ++textureIndex) {
+                for (int textureIndex = 0; textureIndex < textureCount; textureIndex++) {
                     FbxFileTexture* FbxTexture = fbxProperty.GetSrcObject<FbxFileTexture>(textureIndex);
 
                     // create an texture asset
@@ -101,7 +101,7 @@ std::shared_ptr<Assets::MaterialAsset> Scene::CreateMaterial(FbxSurfaceMaterial*
         materialFullName = Utils::SanitizeObjectName(materialFullName);
         finalMaterialName = materialFullName;
     }
-    LOG_INFO("创建材质" + finalMaterialName + "。");
+    LOG_INFO(fmt::format("Creating material {} ...", finalMaterialName));
 
     // Check if we can use the specified base material to instance from it
     auto fbxImportOptions = Importer::GetInstance()->options;
@@ -142,7 +142,7 @@ void Scene::FindOrImportMaterialsFromNode(FbxNode* fbxNode, std::vector<std::sha
     if (FbxMesh* meshNode = fbxNode->GetMesh()) {
         std::set<int> usedMaterialIndexes;
 
-        for (int elementMaterialIndex = 0; elementMaterialIndex < meshNode->GetElementMaterialCount(); ++elementMaterialIndex) {
+        for (int elementMaterialIndex = 0; elementMaterialIndex < meshNode->GetElementMaterialCount(); elementMaterialIndex++) {
             FbxGeometryElementMaterial* elementMaterial = meshNode->GetElementMaterial(elementMaterialIndex);
             switch (elementMaterial->GetMappingMode()) {
                 case FbxLayerElement::eAllSame: {
@@ -151,14 +151,14 @@ void Scene::FindOrImportMaterialsFromNode(FbxNode* fbxNode, std::vector<std::sha
                     }
                 } break;
                 case FbxLayerElement::eByPolygon: {
-                    for (int materialIndex = 0; materialIndex < elementMaterial->GetIndexArray().GetCount(); ++materialIndex) {
+                    for (int materialIndex = 0; materialIndex < elementMaterial->GetIndexArray().GetCount(); materialIndex++) {
                         usedMaterialIndexes.insert(elementMaterial->GetIndexArray()[materialIndex]);
                     }
                 } break;
             }
         }
 
-        for (int materialIndex = 0, materialCount = fbxNode->GetMaterialCount(); materialIndex < materialCount; ++materialIndex) {
+        for (int materialIndex = 0, materialCount = fbxNode->GetMaterialCount(); materialIndex < materialCount; materialIndex++) {
             FbxSurfaceMaterial* fbxMaterial = fbxNode->GetMaterial(materialIndex);
             std::shared_ptr<Assets::MaterialAsset> materialImported = nullptr;
 

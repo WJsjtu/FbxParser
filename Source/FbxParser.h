@@ -17,10 +17,18 @@
 #define FBX_PORT __declspec(dllimport)
 #endif
 #else
-#define FBX_PORT
+#if __has_attribute(visibility)
+#    define FBX_PORT  __attribute__((visibility("default")))
+#else
+#    define FBX_PORT  
+#endif
 #endif
 
 namespace Fbx {
+
+namespace Configuration {
+FBX_PORT extern uint32_t MaxTexCoord;
+}
 
 class FBX_PORT Options {
 public:
@@ -63,7 +71,7 @@ public:
     /** Threshold to compare vertex position equality when computing morph target deltas. */
     float morphThresholdPosition = 0.015f;
 
-	uint32_t maxBones = 96;
+    uint32_t maxBones = 96;
 
     NormalOptions computeNormal = NormalOptions::ForceComputeNormal;
 
@@ -302,7 +310,6 @@ public:
     bool bHasVertexColors;
     bool bHasTangents;
     uint32_t numTexCoords;
-    uint32_t numBoneInfluence;
     std::string rootBonePath;
     std::vector<std::string> bonePaths;
     std::vector<uint16_t> activeBoneIndices;

@@ -15,9 +15,10 @@ namespace Fbx { namespace Importer {
 class MeshImportData {
 public:
     struct MeshWedge {
-        uint32_t iVertex;               // Vertex index.
-        glm::dvec2 UVs[MAX_TEXCOORDS];  // UVs.
-        glm::u8vec4 color;              // Vertex color.
+        MeshWedge(uint32_t maxTexCoord = Configuration::MaxTexCoord);
+        uint32_t iVertex;             // Vertex index.
+        std::vector<glm::dvec2> uvs;  // UVs.
+        glm::u8vec4 color;            // Vertex color.
     };
 
     struct MeshFace {
@@ -113,13 +114,12 @@ public:
 
     // Vertex with texturing info, akin to Hoppe's 'Wedge' concept - import only.
     struct Vertex {
-        uint32_t vertexIndex;           // Index to a vertex.
-        glm::dvec2 UVs[MAX_TEXCOORDS];  // Scaled to BYTES, rather...-> Done in digestion phase, on-disk size doesn't
+        Vertex(uint32_t maxTexCoord = Configuration::MaxTexCoord);
+        uint32_t vertexIndex = 0;     // Index to a vertex.
+        std::vector<glm::dvec2> uvs;  // Scaled to BYTES, rather...-> Done in digestion phase, on-disk size doesn't
         // matter here.
-        glm::vec4 color;         // Vertex colors
-        uint16_t materialIndex;  // At runtime, this one will be implied by the face that's pointing to us.
-
-        Vertex() { memset(this, 0, sizeof(Vertex)); }
+        glm::vec4 color;             // Vertex colors
+        uint16_t materialIndex = 0;  // At runtime, this one will be implied by the face that's pointing to us.
 
         bool operator==(const Vertex& other) const {
             bool equal = true;
@@ -129,8 +129,8 @@ public:
             equal &= (color == other.color);
 
             bool bUVsEqual = true;
-            for (uint32_t UVIdx = 0; UVIdx < MAX_TEXCOORDS; ++UVIdx) {
-                if (UVs[UVIdx] != other.UVs[UVIdx]) {
+            for (uint32_t UVIdx = 0; UVIdx < Configuration::MaxTexCoord; UVIdx++) {
+                if (uvs[UVIdx] != other.uvs[UVIdx]) {
                     bUVsEqual = false;
                     break;
                 }

@@ -4,4 +4,8 @@ ThirdParty/ext-mikktspace
 ThirdParty/filesystem
 ThirdParty/ImageDecoder
 ThirdParty/spdlog
+ThirdParty/cxxopts
+ThirdParty/rapidjson
 Build
+node_modules
+FBX/Bin/**/*.log
