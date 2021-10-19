@@ -1,8 +1,6 @@
 ﻿#include "Resource.h"
 #include <iostream>
 #include <string>
-#include <locale>
-#include <codecvt>
 #include <exception>
 
 namespace Exporter {
@@ -139,7 +137,6 @@ void ExportStore::AddJSONFile(const std::string& relativePath, const std::string
     auto savePath = ghc::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream jsonFile(savePath.generic_string(), std::ios::out);
-        jsonFile.imbue(std::locale("en_US.utf8"));
 #ifdef _MSC_VER
         std::string encoded = ANSItoUTF8(content);
 #else
@@ -157,7 +154,6 @@ void ExportStore::AddTextFile(const std::string& relativePath, const std::string
     auto savePath = ghc::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream textFile(savePath.generic_string(), std::ios::out);
-        textFile.imbue(std::locale("en_US.utf8"));
 #ifdef _MSC_VER
         std::string encoded = ANSItoUTF8(content);
 #else
@@ -312,7 +308,6 @@ void ExportStore::SaveStorage(const std::string& entryRelativePath) {
     auto savePath = ghc::filesystem::path(GetExportDirectory()) / "group.manifest.json";
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream manifistFile(savePath.generic_string(), std::ios::out);
-        manifistFile.imbue(std::locale("en_US.utf8"));
 #ifdef _MSC_VER
         std::string encoded = ANSItoUTF8(json);
 #else

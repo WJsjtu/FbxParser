@@ -8,8 +8,6 @@
 #include "rapidjson/schema.h"
 #include "FbxParser.h"
 #include <string>
-#include <locale>
-#include <codecvt>
 
 std::string toString(std::shared_ptr<Fbx::FbxInfo> info) {
     rapidjson::StringBuffer sb;
@@ -274,7 +272,6 @@ int main(int argc, char* argv[]) {
             auto savePath = ghc::filesystem::path(Exporter::GetExportDirectory()) / "info.json";
             if (Exporter::EnsurePath(savePath.generic_string())) {
                 std::ofstream infoFile(savePath.generic_string(), std::ios::out);
-                infoFile.imbue(std::locale("en_US.utf8"));
 #ifdef _MSC_VER
                 infoJson = Exporter::ANSItoUTF8(infoJson);
 #endif
