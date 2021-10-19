@@ -48,6 +48,7 @@ include("image.cmake")
 include("spdlog.cmake")
 include("cxxopts.cmake")
 include("rapidjson.cmake")
+include("filesystem.cmake")
 
 add_subdirectory("${PROJECT_SOURCE_DIR}/ThirdParty/ForsythTriOO")
 

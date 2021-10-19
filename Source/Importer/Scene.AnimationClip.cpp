@@ -1,5 +1,4 @@
-﻿#include <filesystem>
-#include "Animation.h"
+﻿#include "Animation.h"
 #include "Builder/SkinnedMeshBuilder.h"
 #include "Scene.h"
 

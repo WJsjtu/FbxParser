@@ -271,7 +271,7 @@ int main(int argc, char* argv[]) {
             auto prefabPath = prefab->Export();
             Exporter::ExportStore::SaveStorage(prefabPath);
             std::string infoJson = toString(result.first);
-            auto savePath = std::filesystem::path(Exporter::GetExportDirectory()) / "info.json";
+            auto savePath = ghc::filesystem::path(Exporter::GetExportDirectory()) / "info.json";
             if (Exporter::EnsurePath(savePath.generic_string())) {
                 std::ofstream infoFile(savePath.generic_string(), std::ios::out);
                 infoFile.imbue(std::locale("en_US.utf8"));

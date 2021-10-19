@@ -1,5 +1,4 @@
-﻿#include <filesystem>
-#include "Scene.h"
+﻿#include "Scene.h"
 
 namespace Fbx { namespace Importer {
 MeshImportData::MeshWedge::MeshWedge(uint32_t maxTexCoord) { uvs.resize(maxTexCoord); }

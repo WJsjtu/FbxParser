@@ -15,7 +15,7 @@ std::wstring GetStringValueFromHKLM(const std::wstring& regSubKey, const std::ws
     std::wstring valueBuf;      // Contiguous buffer since C++11.
     valueBuf.resize(bufferSize);
     auto cbData = static_cast<DWORD>(bufferSize * sizeof(wchar_t));
-    auto rc = RegGetValueW(HKEY_LOCAL_MACHINE, regSubKey.c_str(), regValue.c_str(), RRF_RT_REG_SZ, nullptr, static_cast<void*>(valueBuf.data()), &cbData);
+    auto rc = RegGetValueW(HKEY_LOCAL_MACHINE, regSubKey.c_str(), regValue.c_str(), RRF_RT_REG_SZ, nullptr, (void*)(valueBuf.data()), &cbData);
     while (rc == ERROR_MORE_DATA) {
         // Get a buffer that is big enough.
         cbData /= sizeof(wchar_t);
@@ -26,7 +26,7 @@ std::wstring GetStringValueFromHKLM(const std::wstring& regSubKey, const std::ws
             cbData = static_cast<DWORD>(bufferSize * sizeof(wchar_t));
         }
         valueBuf.resize(bufferSize);
-        rc = RegGetValueW(HKEY_LOCAL_MACHINE, regSubKey.c_str(), regValue.c_str(), RRF_RT_REG_SZ, nullptr, static_cast<void*>(valueBuf.data()), &cbData);
+        rc = RegGetValueW(HKEY_LOCAL_MACHINE, regSubKey.c_str(), regValue.c_str(), RRF_RT_REG_SZ, nullptr, (void*)(valueBuf.data()), &cbData);
     }
     if (rc == ERROR_SUCCESS) {
         cbData /= sizeof(wchar_t);
@@ -61,9 +61,9 @@ std::string GetExportDirectory() { return ExportDirectory; }
 
 bool ExistPath(const std::string& path) {
     try {
-        return std::filesystem::exists(path);
-    } catch (std::filesystem::filesystem_error error) {
-        std::cerr << "[std::filesystem::filesystem_error]: " << error.what() << std::endl;
+        return ghc::filesystem::exists(path);
+    } catch (ghc::filesystem::filesystem_error error) {
+        std::cerr << "[ghc::filesystem::filesystem_error]: " << error.what() << std::endl;
         return false;
     } catch (...) {
         return false;
@@ -71,14 +71,14 @@ bool ExistPath(const std::string& path) {
 }
 
 bool EnsurePath(const std::string& path) {
-    std::string dir_path = std::filesystem::path(path).parent_path().generic_string();
+    std::string dir_path = ghc::filesystem::path(path).parent_path().generic_string();
     try {
-        if (!ExistPath(dir_path) || !std::filesystem::is_directory(dir_path)) {
-            return std::filesystem::create_directories(dir_path);
+        if (!ExistPath(dir_path) || !ghc::filesystem::is_directory(dir_path)) {
+            return ghc::filesystem::create_directories(dir_path);
         }
         return true;
-    } catch (std::filesystem::filesystem_error error) {
-        std::cerr << "[std::filesystem::filesystem_error]: " << error.what() << std::endl;
+    } catch (ghc::filesystem::filesystem_error error) {
+        std::cerr << "[ghc::filesystem::filesystem_error]: " << error.what() << std::endl;
         return false;
     } catch (...) {
         return false;
@@ -112,7 +112,7 @@ bool ExportStore::IsFileConverted(const std::string& relativePath, const std::st
 bool ExportStore::IsFilePathValid(const std::string& relativePath) { return files.find(relativePath) == files.end(); }
 
 void ExportStore::AddBinaryFile(const std::string& relativePath, const std::vector<char>& content, const std::string& assetMD5) {
-    auto savePath = std::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
+    auto savePath = ghc::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream binaryFile(savePath.generic_string(), std::ios::out | std::ios::binary);
         if (binaryFile) {
@@ -124,7 +124,7 @@ void ExportStore::AddBinaryFile(const std::string& relativePath, const std::vect
 }
 
 void ExportStore::AddImageFile(const std::string& relativePath, const std::vector<char>& imageData, const std::string& assetMD5) {
-    auto savePath = std::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
+    auto savePath = ghc::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream imageFile(savePath.generic_string(), std::ios::out | std::ios::binary);
         if (imageFile) {
@@ -136,7 +136,7 @@ void ExportStore::AddImageFile(const std::string& relativePath, const std::vecto
 }
 
 void ExportStore::AddJSONFile(const std::string& relativePath, const std::string& content, const std::string& assetMD5) {
-    auto savePath = std::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
+    auto savePath = ghc::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream jsonFile(savePath.generic_string(), std::ios::out);
         jsonFile.imbue(std::locale("en_US.utf8"));
@@ -154,7 +154,7 @@ void ExportStore::AddJSONFile(const std::string& relativePath, const std::string
 }
 
 void ExportStore::AddTextFile(const std::string& relativePath, const std::string& content, const std::string& assetMD5) {
-    auto savePath = std::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
+    auto savePath = ghc::filesystem::path(GetExportDirectory()) / CleanIllegalChar(relativePath, true);
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream textFile(savePath.generic_string(), std::ios::out);
         textFile.imbue(std::locale("en_US.utf8"));
@@ -309,7 +309,7 @@ void ExportStore::SaveStorage(const std::string& entryRelativePath) {
     PRETTIFY_JSON(json);
 #endif
 
-    auto savePath = std::filesystem::path(GetExportDirectory()) / "group.manifest.json";
+    auto savePath = ghc::filesystem::path(GetExportDirectory()) / "group.manifest.json";
     if (EnsurePath(savePath.generic_string())) {
         std::ofstream manifistFile(savePath.generic_string(), std::ios::out);
         manifistFile.imbue(std::locale("en_US.utf8"));

@@ -1,7 +1,7 @@
 #include "Scene.h"
 #include "Decoder.h"
 #include "FbxParser.private.h"
-#include <filesystem>
+#include "ghc/filesystem.hpp"
 #include <fstream>
 
 namespace Fbx { namespace Importer {
@@ -13,7 +13,7 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
     // create an texture asset
     std::shared_ptr<Assets::TextureAsset> exportTexture = nullptr;
     std::string absoluteFilename = ImporterHelper::UTF8ToNative(fbxTexture->GetFileName());
-    std::string extension = std::filesystem::path(absoluteFilename).extension().generic_string();
+    std::string extension = ghc::filesystem::path(absoluteFilename).extension().generic_string();
     Utils::ToLowerCase(extension);
 
     // name the texture with file name
@@ -22,7 +22,7 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
     if (foundTexture != FbxTextureToUniqueNameMap.end()) {
         textureName = foundTexture->second;
     } else {
-        textureName = std::filesystem::path(absoluteFilename).stem().generic_string();
+        textureName = ghc::filesystem::path(absoluteFilename).stem().generic_string();
         textureName = Utils::SanitizeObjectName(textureName);
         FbxTextureToUniqueNameMap[fbxTexture] = textureName;
     }

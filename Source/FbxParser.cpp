@@ -1,7 +1,7 @@
 ﻿#include "FbxParser.h"
 #include "FbxParser.private.h"
 #include <random>
-#include <filesystem>
+#include "ghc/filesystem.hpp"
 #include "Importer/Scene.h"
 
 namespace Fbx {
@@ -460,9 +460,9 @@ std::string SanitizeInvalidChars(const std::string& inText, const char* invalidC
 
 bool ExistPath(const std::string& path) {
     try {
-        return std::filesystem::exists(path);
-    } catch (std::filesystem::filesystem_error error) {
-        LOG_DEBUG(std::string("[std::filesystem::filesystem_error]: ") + error.what());
+        return ghc::filesystem::exists(path);
+    } catch (ghc::filesystem::filesystem_error error) {
+        LOG_DEBUG(std::string("[ghc::filesystem::filesystem_error]: ") + error.what());
         return false;
     } catch (...) {
         return false;
@@ -470,14 +470,14 @@ bool ExistPath(const std::string& path) {
 }
 
 bool EnsurePath(const std::string& path) {
-    std::string dir_path = std::filesystem::path(path).parent_path().generic_string();
+    std::string dir_path = ghc::filesystem::path(path).parent_path().generic_string();
     try {
-        if (!ExistPath(dir_path) || !std::filesystem::is_directory(dir_path)) {
-            return std::filesystem::create_directories(dir_path);
+        if (!ExistPath(dir_path) || !ghc::filesystem::is_directory(dir_path)) {
+            return ghc::filesystem::create_directories(dir_path);
         }
         return true;
-    } catch (std::filesystem::filesystem_error error) {
-        LOG_DEBUG(std::string("[std::filesystem::filesystem_error]: ") + error.what());
+    } catch (ghc::filesystem::filesystem_error error) {
+        LOG_DEBUG(std::string("[ghc::filesystem::filesystem_error]: ") + error.what());
         return false;
     } catch (...) {
         return false;
@@ -544,7 +544,7 @@ std::pair<std::shared_ptr<FbxInfo>, std::shared_ptr<Objects::Entity>> ParseFbx(c
     if (info) {
         auto scene = iptr->ImportScene(info, options);
         if (scene) {
-            scene->root->name = std::filesystem::path(filePath).stem().generic_string();
+            scene->root->name = ghc::filesystem::path(filePath).stem().generic_string();
             std::shared_ptr<FbxInfo> fbxInfo = std::make_shared<FbxInfo>();
             fbxInfo->fileVersion = info->FbxFileVersion;
             fbxInfo->fileCreator = info->FbxFileCreator;

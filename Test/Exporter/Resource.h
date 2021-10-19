@@ -12,7 +12,7 @@
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/rapidjson.h"
 #include "rapidjson/schema.h"
-#include <filesystem>
+#include "ghc/filesystem.hpp"
 
 #define ASSERT assert
 

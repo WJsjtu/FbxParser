@@ -1,5 +1,5 @@
 ﻿#include "Scene.h"
-#include <filesystem>
+#include "ghc/filesystem.hpp"
 #include <set>
 #include <numeric>
 
@@ -450,7 +450,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filePat
 
     bool bStatus;
 
-    result->fileBasePath = std::filesystem::path(filePath).parent_path().generic_string();
+    result->fileBasePath = ghc::filesystem::path(filePath).parent_path().generic_string();
 
     // Create the Scene
     result->scene = FbxScene::Create(sdkManager, "");
@@ -476,7 +476,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filePat
     }
 
     {
-        std::string baseFilename = (std::filesystem::path(filePath).stem().generic_string());
+        std::string baseFilename = (ghc::filesystem::path(filePath).stem().generic_string());
 
         std::set<std::string> allNodeName;
         int currentNameIndex = 1;
@@ -589,7 +589,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filePat
         // Then rename make sure the texture have unique names as well.
         for (FbxFileTexture* currentTexture : materialTextures) {
             std::string absoluteFilename = ImporterHelper::UTF8ToNative(currentTexture->GetFileName());
-            std::string textureName = std::filesystem::path(absoluteFilename).stem().generic_string();
+            std::string textureName = ghc::filesystem::path(absoluteFilename).stem().generic_string();
             auto SanitizeInvalidCharsInline = [](std::string& InText, const char* InvalidChars = INVALID_OBJECTNAME_CHARACTERS) {
                 const char* InvalidChar = InvalidChars ? InvalidChars : "";
                 while (*InvalidChar) {
