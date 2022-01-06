@@ -58,6 +58,37 @@ jobs:
         run: echo "::set-output name=FBX_PATH::$(cat fbx.txt)"
 
       - name: Configure CMake Debug
+        run: cmake -B ${{github.workspace}}/Build/Debug -G "Visual Studio 15 2017" -A Win32 -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/Debug -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
+      - name: Build Debug
+        run: cmake --build ${{github.workspace}}/Build/Debug --config DEBUG --target install
+      
+      - name: Configure CMake MinSizeRel
+        run: cmake -B ${{github.workspace}}/Build/MinSizeRel -G "Visual Studio 15 2017" -A Win32 -DCMAKE_BUILD_TYPE=MINSIZEREL -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/MinSizeRel -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
+      - name: Build MinSizeRel
+        run: cmake --build ${{github.workspace}}/Build/MinSizeRel --config MINSIZEREL --target install
+
+      - uses: actions/upload-artifact@master
+        with:
+          name: win32
+          path: |
+            ${{github.workspace}}/Install/Debug
+            ${{github.workspace}}/Install/MinSizeRel
+  
+  build-windows-win64-vs2017:
+    name: Win64 (Windows, VS2017)
+    runs-on: windows-2016
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Install
+        run: CI/GitHubInstall.ps1
+        shell: pwsh
+
+      - name: Read Install Path
+        id: get-fbx-path
+        run: echo "::set-output name=FBX_PATH::$(cat fbx.txt)"
+
+      - name: Configure CMake Debug
         run: cmake -B ${{github.workspace}}/Build/Debug -G "Visual Studio 15 2017" -A x64 -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/Install/Debug -DFBX_VENDER_DIR=${{steps.get-fbx-path.outputs.FBX_PATH}}
       - name: Build Debug
         run: cmake --build ${{github.workspace}}/Build/Debug --config DEBUG --target install
@@ -69,14 +100,15 @@ jobs:
 
       - uses: actions/upload-artifact@master
         with:
-          name: win32
+          name: win64
           path: |
             ${{github.workspace}}/Install/Debug
             ${{github.workspace}}/Install/MinSizeRel
 
+
   release:
     name: Release
-    needs: [build-macos-cocoa-clang, build-windows-win32-vs2017]
+    needs: [build-macos-cocoa-clang, build-windows-win32-vs2017, build-windows-win64-vs2017]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
@@ -89,7 +121,12 @@ jobs:
       - uses: actions/download-artifact@master
         with:
           name: win32
-          path: ${{github.workspace}}/release/win32
+          path: ${{github.workspace}}/release/win32/x86
+      
+      - uses: actions/download-artifact@master
+        with:
+          name: win64
+          path: ${{github.workspace}}/release/win32/x64
 
       - name: Zip
         run: cd ${{github.workspace}}/release && zip -vr ${{github.workspace}}/release.zip ./ && cd ${{github.workspace}}

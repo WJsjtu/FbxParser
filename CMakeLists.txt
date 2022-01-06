@@ -14,7 +14,6 @@ if (WIN32)
   project(${PROJECT_NAME} C CXX ASM)
   set (CMAKE_CXX_STANDARD 14)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_GENERATOR_PLATFORM x64)
   add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
   add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
   add_definitions(-DUNICODE)
@@ -81,8 +80,13 @@ target_link_libraries(${LIBRARY_NAME} "ForsythTriOO")
 target_link_libraries(${LIBRARY_NAME} "ext-mikktspace")
 if(WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4819")
-  target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
-  target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib)
+  if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+    target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
+    target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib)
+  else()
+    target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
+    target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib)
+  endif()
 else()
   target_include_directories(${LIBRARY_NAME} PRIVATE ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include)
   target_link_libraries(${LIBRARY_NAME} ${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/libimage.dylib)
@@ -172,9 +176,15 @@ COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_FILE_DIR:${LIBRARY_NAME}>" 
 )
 
 if(WIN32)
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/bin "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-  )
+  if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/bin "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+  else()
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/bin "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+  endif()
 else()
   set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-Wl,-rpath,./")
   set_target_properties(${PROJECT_NAME} PROPERTIES CMAKE_BUILD_RPATH "$ORIGIN")
