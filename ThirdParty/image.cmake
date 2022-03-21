@@ -1,6 +1,46 @@
 ﻿UpdateExternalLib("ImageDecoder" https://github.com/WJsjtu/ImageDecoder.git "v0.0.1")
 
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/download/ImageDecoder)
-execute_process(COMMAND curl -L -o ${CMAKE_BINARY_DIR}/download/ImageDecoder/release.zip https://github.com/WJsjtu/ImageDecoder/releases/download/v0.0.1/release.zip)
+set(IMAGE_DECODER_INSTALL_DIR "${CMAKE_BINARY_DIR}/ThirdParty/install/${CMAKE_BUILD_TYPE}/ImageDecoder")
+set(IMAGE_DECODER_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ThirdParty/ImageDecoder")
 
-file(ARCHIVE_EXTRACT INPUT ${CMAKE_BINARY_DIR}/download/ImageDecoder/release.zip DESTINATION ${CMAKE_BINARY_DIR}/download/ImageDecoder VERBOSE)
+if(WIN32)
+  execute_process(COMMAND ${CMAKE_COMMAND} 
+    -G "${CMAKE_GENERATOR}" 
+    -A "${CMAKE_GENERATOR_PLATFORM}" 
+    -T "${CMAKE_GENERATOR_TOOLSET}" 
+    -DCMAKE_CXX_FLAGS_RELEASE="/MD" 
+    -DCMAKE_CXX_FLAGS_DEBUG="/MDd" 
+    -DCMAKE_C_FLAGS_RELEASE="/MD" 
+    -DCMAKE_C_FLAGS_DEBUG="/MDd" 
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} 
+    -DCMAKE_INSTALL_PREFIX=${IMAGE_DECODER_INSTALL_DIR} 
+    -DBUILD_SHARED_LIBS=${USE_IMAGE_SHARED} 
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON 
+    -B "${CMAKE_BINARY_DIR}/ThirdParty/build/${CMAKE_BUILD_TYPE}/ImageDecoder" 
+    WORKING_DIRECTORY "${IMAGE_DECODER_SOURCE_DIR}"
+  )
+  execute_process(COMMAND ${CMAKE_COMMAND} --build . --config ${CMAKE_BUILD_TYPE} --target install 
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/ThirdParty/build/${CMAKE_BUILD_TYPE}/ImageDecoder"
+  )
+else()
+  execute_process(COMMAND ${CMAKE_COMMAND} 
+    -G "${CMAKE_GENERATOR}" 
+    -A "${CMAKE_GENERATOR_PLATFORM}" 
+    -T "${CMAKE_GENERATOR_TOOLSET}" 
+    -DCMAKE_MACOSX_RPATH=ON 
+    -DCMAKE_OSX_DEPLOYMENT_TARGET="${OSX_VERSION}" 
+    -DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES} 
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} 
+    -DCMAKE_INSTALL_PREFIX=${IMAGE_DECODER_INSTALL_DIR} 
+    -DBUILD_SHARED_LIBS=${USE_IMAGE_SHARED} 
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON 
+    -B "${CMAKE_BINARY_DIR}/ThirdParty/build/${CMAKE_BUILD_TYPE}/ImageDecoder"
+    WORKING_DIRECTORY "${IMAGE_DECODER_SOURCE_DIR}"
+  )
+  execute_process(COMMAND ${CMAKE_COMMAND} --build . --config ${CMAKE_BUILD_TYPE} --target install 
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/ThirdParty/build/${CMAKE_BUILD_TYPE}/ImageDecoder"
+  )
+endif()
+
+set(IMAGE_DECODER_INSTALL_DIR "${IMAGE_DECODER_INSTALL_DIR}" CACHE PATH "zlib dir" FORCE)
+set(IMAGE_DECODER_ROOT "${IMAGE_DECODER_SOURCE_DIR}" CACHE PATH "image decoder root" FORCE)

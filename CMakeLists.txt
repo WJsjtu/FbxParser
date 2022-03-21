@@ -82,61 +82,31 @@ target_link_libraries(${LIBRARY_NAME} "ext-mikktspace")
 if(WIN32)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4819")
   if(USE_IMAGE_SHARED)
-    if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-      target_include_directories(${LIBRARY_NAME} PRIVATE "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include")
-      target_link_libraries(${LIBRARY_NAME} "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib")
-    else()
-      target_include_directories(${LIBRARY_NAME} PRIVATE "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include")
-      target_link_libraries(${LIBRARY_NAME} "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/image.lib")
-    endif()
+    target_include_directories(${LIBRARY_NAME} PRIVATE "${IMAGE_DECODER_INSTALL_DIR}/include")
+    target_link_libraries(${LIBRARY_NAME} "${IMAGE_DECODER_INSTALL_DIR}/lib/image.lib")
   else()
     target_compile_definitions(${LIBRARY_NAME} PRIVATE IMAGE_STATIC)
-    if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-      file(
-        GLOB_RECURSE image_debug_libs
-        LIST_DIRECTORIES false
-        "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/static/Debug/lib/*.lib"
-      )
-      file(
-        GLOB_RECURSE image_release_libs
-        LIST_DIRECTORIES false
-        "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/static/MinSizeRel/lib/*.lib"
-      )
-      target_include_directories(${LIBRARY_NAME} PRIVATE "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/static/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include")
-      target_link_libraries(${LIBRARY_NAME} "$<IF:$<CONFIG:Debug>,${image_debug_libs},${image_release_libs}>")
-    else()
-      file(
-        GLOB_RECURSE image_debug_libs
-        LIST_DIRECTORIES false
-        "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/static/Debug/lib/*.lib"
-      )
-      file(
-        GLOB_RECURSE image_release_libs
-        LIST_DIRECTORIES false
-        "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/static/MinSizeRel/lib/*.lib"
-      )
-      target_include_directories(${LIBRARY_NAME} PRIVATE "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/static/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include")
-      target_link_libraries(${LIBRARY_NAME} "$<IF:$<CONFIG:Debug>,${image_debug_libs},${image_release_libs}>")
-    endif()
+    file(
+      GLOB_RECURSE image_libs
+      LIST_DIRECTORIES false
+      "${IMAGE_DECODER_INSTALL_DIR}/lib/*.lib"
+    )
+    target_include_directories(${LIBRARY_NAME} PRIVATE "${IMAGE_DECODER_INSTALL_DIR}/include")
+    target_link_libraries(${LIBRARY_NAME} "${image_libs}")
   endif()
 else()
   if(USE_IMAGE_SHARED)
-    target_include_directories(${LIBRARY_NAME} PRIVATE "${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include")
-    target_link_libraries(${LIBRARY_NAME} "${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib/libimage.dylib")
+    target_include_directories(${LIBRARY_NAME} PRIVATE "${IMAGE_DECODER_INSTALL_DIR}/include")
+    target_link_libraries(${LIBRARY_NAME} "${IMAGE_DECODER_INSTALL_DIR}/bin/libimage.dylib")
   else()
     target_compile_definitions(${LIBRARY_NAME} PRIVATE IMAGE_STATIC)
     file(
-      GLOB_RECURSE image_debug_libs
+      GLOB_RECURSE image_libs
       LIST_DIRECTORIES false
-      "${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/static/Debug/lib/*.a"
+      "${IMAGE_DECODER_INSTALL_DIR}/lib/*.a"
     )
-    file(
-      GLOB_RECURSE image_release_libs
-      LIST_DIRECTORIES false
-      "${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/static/MinSizeRel/lib/*.a"
-    )
-    target_include_directories(${LIBRARY_NAME} PRIVATE "${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/static/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/include")
-    target_link_libraries(${LIBRARY_NAME} "$<IF:$<CONFIG:Debug>,${image_debug_libs},${image_release_libs}>")
+    target_include_directories(${LIBRARY_NAME} PRIVATE "${IMAGE_DECODER_INSTALL_DIR}/include")
+    target_link_libraries(${LIBRARY_NAME} "${image_libs}")
   endif()
     
   target_compile_options(${LIBRARY_NAME} PUBLIC -fvisibility=hidden)
@@ -158,7 +128,7 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR})
 find_package(Fbx 2020.2.1)
 if(NOT FBX_FOUND)
-    message("Fbx SDK not found!")
+  message("Fbx SDK not found!")
 else()
   target_include_directories(${LIBRARY_NAME} PUBLIC ${FBX_INCLUDE_DIRS})
   target_link_libraries(${LIBRARY_NAME} debug ${FBX_LIBRARIES_DEBUG} optimized ${FBX_LIBRARIES})
@@ -225,15 +195,9 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 
 if(WIN32)
   if(USE_IMAGE_SHARED)
-    if ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32")
-      add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x86/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/bin" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-      )
-    else()
-      add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/download/ImageDecoder/win32/x64/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/bin" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-      )
-    endif()
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${IMAGE_DECODER_INSTALL_DIR}/bin" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
   endif()
 else()
   set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-Wl,-rpath,./")
@@ -241,7 +205,7 @@ else()
   set_target_properties(${PROJECT_NAME} PROPERTIES CMAKE_INSTALL_RPATH "$ORIGIN")
   if(USE_IMAGE_SHARED)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_BINARY_DIR}/download/ImageDecoder/darwin/shared/$<IF:$<CONFIG:Debug>,Debug,MinSizeRel>/lib" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${IMAGE_DECODER_INSTALL_DIR}/bin" "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
     )
   endif()
 endif()
