@@ -492,7 +492,7 @@ std::shared_ptr<SceneInfo> Importer::GetFileSceneInfo(const std::string& filePat
                 LOG_WARN(fmt::format("Set name \"{}\" for unnamed node.", nodeName));
             }
             // Do not allow node to be named same as filename as this creates problems later on (reimport)
-            if (allNodeName.find(nodeName) != allNodeName.end() || Utils::InsensitiveCaseEquals(nodeName, baseFilename)) {
+            if (allNodeName.find(nodeName) != allNodeName.end()) {
                 std::string uniqueNodeName;
                 do {
                     uniqueNodeName = nodeName + std::to_string(currentNameIndex++);

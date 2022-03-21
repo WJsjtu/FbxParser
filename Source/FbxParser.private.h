@@ -419,6 +419,7 @@ void Split(char delimiter, Output& output, Input const& input) {
 }
 #ifdef _MSC_VER
 std::string ANSItoUTF8(std::string& strAnsi);
+std::string UTF8toANSI(std::string& strAnsi);
 #endif
 }  // namespace Utils
 }  // namespace Fbx

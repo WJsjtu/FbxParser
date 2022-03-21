@@ -91,12 +91,14 @@ std::shared_ptr<Assets::TextureAsset> Scene::ImportTexture(FbxFileTexture* fbxTe
                     }
 
                     std::string warn;
-                    if (format != ImageDecoder::EImageFormat::Invalid && ImageDecoder::DecodeImage(format, reinterpret_cast<uint8_t*>(dataBinary.data()), dataBinary.size(), true, warn, image)) {
+                    ImageDecoder::Vector<char> warnChars;
+                    if (format != ImageDecoder::EImageFormat::Invalid && ImageDecoder::DecodeImage(format, reinterpret_cast<uint8_t*>(dataBinary.data()), dataBinary.size(), true, warnChars, image)) {
+                        warn = std::string(warnChars.begin(), warnChars.end());
                         if (warn.size()) {
                             LOG_INFO(warn);
                         }
 
-                        exportTexture->decoded = image.data;
+                        exportTexture->decoded = std::vector<uint8_t>(image.data.begin(), image.data.end());
                         exportTexture->width = image.width;
                         exportTexture->height = image.height;
                         exportTexture->numMips = image.numMips;

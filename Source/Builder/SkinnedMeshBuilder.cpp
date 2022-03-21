@@ -889,7 +889,7 @@ bool SkinnedMeshBuilder::BuildSkinnedMesh(SkinnedMeshAsset& model, const std::st
     // Only show these warnings if in the game thread.  When importing morph targets, this function can run in another
     // thread and these warnings dont prevent the mesh from importing
 
-    bool bHasBadSections = buildData.model.sections.size() != 0;
+    bool bHasBadSections = buildData.model.sections.size() == 0;
     for (int sectionIndex = 0; sectionIndex < buildData.model.sections.size(); sectionIndex++) {
         SkinnedSubMeshAsset& section = buildData.model.sections[sectionIndex];
         bHasBadSections |= (section.numTriangles == 0);
